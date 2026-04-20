@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:15
+    container_name: bodyfuel_db
+    environment:
+      POSTGRES_USER: bodyfuel
+      POSTGRES_PASSWORD: bodyfuel
+      POSTGRES_DB: bodyfuel
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    container_name: bodyfuel_redis
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    container_name: bodyfuel_backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
+  frontend:
+    build: ./frontend
+    container_name: bodyfuel_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  scraper:
+    build: ./scraper
+    container_name: bodyfuel_scraper
+    depends_on:
+      - db
