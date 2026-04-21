@@ -1,14 +1,16 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models import User
-from ..schemas import UserCreate, UserResponse, UserUpdate
+from ..schemas import AuthCredentials, UserCreate, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 USER_NOT_FOUND = "Usuario no encontrado"
+INVALID_CREDENTIALS = "Correo o contraseña incorrectos"
 
 
 def get_db():
@@ -21,13 +23,35 @@ def get_db():
 
 @router.post("/", response_model=UserResponse)
 def create_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Ese correo ya está registrado")
+
     user_data = user.dict()
     user_data["nombre"] = user_data.get("nombre") or user_data["email"]
     new_user = User(**user_data)
     db.add(new_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Ese correo ya está registrado")
     db.refresh(new_user)
     return new_user
+
+
+@router.post("/register", response_model=UserResponse)
+def register_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
+    return create_user(user, db)
+
+
+@router.post("/login", response_model=UserResponse, responses={401: {"description": INVALID_CREDENTIALS}})
+def login_user(credentials: AuthCredentials, db: Annotated[Session, Depends(get_db)]):
+    user = db.query(User).filter(User.email == credentials.email).first()
+    if not user or user.password != credentials.password:
+        raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
+
+    return user
 
 
 @router.get("/", response_model=list[UserResponse])
@@ -55,6 +79,13 @@ def update_user(user_id: int, data: UserUpdate, db: Annotated[Session, Depends(g
     update_data = data.dict(exclude_unset=True)
 
     if "email" in update_data:
+        email_exists = (
+            db.query(User)
+            .filter(User.email == update_data["email"], User.id != user_id)
+            .first()
+        )
+        if email_exists:
+            raise HTTPException(status_code=400, detail="Ese correo ya está registrado")
         user.email = update_data["email"]
 
     if "password" in update_data:

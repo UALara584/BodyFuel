@@ -31,6 +31,11 @@ class UserResponse(UserCreate):
         from_attributes = True
 
 
+class AuthCredentials(BaseModel):
+    email: str
+    password: str
+
+
 class TrackingCreate(BaseModel):
     user_id: int
     fecha: date

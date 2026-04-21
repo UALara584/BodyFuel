@@ -3,7 +3,6 @@ import { fetchRecipes } from "../services/api";
 
 export default function RecipesPage() {
   const [recipes, setRecipes] = useState([]);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -25,27 +24,12 @@ export default function RecipesPage() {
     loadRecipes();
   }, []);
 
-  function handleSubmit(event) {
-    event.preventDefault();
-    loadRecipes(search);
-  }
-
   return (
     <div className="page">
       <div className="page-header">
         <h2>Recetas</h2>
         <p>Consulta recetas y revisa su información nutricional.</p>
       </div>
-
-      <form onSubmit={handleSubmit} className="search-form">
-        <input
-          type="text"
-          placeholder="Buscar receta"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <button type="submit">Buscar</button>
-      </form>
 
       {loading && <p>Cargando...</p>}
       {error && <p className="error-text">{error}</p>}

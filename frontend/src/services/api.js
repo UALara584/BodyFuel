@@ -37,6 +37,18 @@ export async function fetchFullPlan(userId, weekStart) {
   return handleResponse(response, "Error al obtener el plan semanal");
 }
 
+export async function createPlan(planData) {
+  const response = await fetch(`${API_BASE_URL}/plans/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(planData),
+  });
+
+  return handleResponse(response, "Error al crear el plan semanal");
+}
+
 export async function createMeal(mealData) {
   const response = await fetch(`${API_BASE_URL}/meals/`, {
     method: "POST",
@@ -47,6 +59,31 @@ export async function createMeal(mealData) {
   });
 
   return handleResponse(response, "Error al crear comida");
+}
+
+export async function createMealItem(mealItemData) {
+  const response = await fetch(`${API_BASE_URL}/meal-items/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(mealItemData),
+  });
+
+  return handleResponse(response, "Error al añadir elemento a la comida");
+}
+
+export async function deleteMealItem(itemId) {
+  const response = await fetch(`${API_BASE_URL}/meal-items/${itemId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error al eliminar elemento: ${errorText}`);
+  }
+
+  return null;
 }
 
 export async function createFood(foodData) {
@@ -89,6 +126,11 @@ export async function fetchUserById(userId) {
   return handleResponse(response, "Error al obtener usuario");
 }
 
+export async function fetchTrackingByUser(userId) {
+  const response = await fetch(`${API_BASE_URL}/tracking/${userId}`);
+  return handleResponse(response, "Error al obtener seguimiento");
+}
+
 export async function registerUser(userData) {
   const response = await fetch(`${API_BASE_URL}/users/`, {
     method: "POST",
@@ -115,16 +157,7 @@ export async function registerUserWithCredentials({
   objetivo,
   calorias_objetivo,
 }) {
-  const users = await fetchUsers();
   const normalizedEmail = normalizeEmail(email);
-
-  const alreadyExists = users.some(
-    (item) => (item.email || "").trim().toLowerCase() === normalizedEmail
-  );
-
-  if (alreadyExists) {
-    throw new Error("Ese correo ya está registrado.");
-  }
 
   return registerUser({
     email: normalizedEmail,
@@ -139,18 +172,18 @@ export async function registerUserWithCredentials({
 }
 
 export async function loginUserWithCredentials({ email, password }) {
-  const users = await fetchUsers();
-  const normalizedEmail = normalizeEmail(email);
+  const response = await fetch(`${API_BASE_URL}/users/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email: normalizeEmail(email),
+      password,
+    }),
+  });
 
-  const user = users.find(
-    (item) => (item.email || "").trim().toLowerCase() === normalizedEmail && item.password === password
-  );
-
-  if (!user) {
-    throw new Error("Correo o contraseña incorrectos.");
-  }
-
-  return user;
+  return handleResponse(response, "Correo o contraseña incorrectos");
 }
 
 export async function updateUser(userId, userData) {

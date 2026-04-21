@@ -31,6 +31,8 @@ function RequireAuth() {
 
 function AppLayout() {
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
+  const userName = currentUser?.nombre || "Usuario";
 
   function handleLogout() {
     localStorage.removeItem("bf_current_user");
@@ -43,7 +45,7 @@ function AppLayout() {
         <div className="header-text app-header-inner">
           <div>
             <h1>BodyFuel</h1>
-            <p>Planificación nutricional semanal</p>
+            <p>Hola, {userName}. Planifica tu nutrición semanal.</p>
           </div>
 
           <button type="button" className="logout-button" onClick={handleLogout}>
@@ -53,14 +55,6 @@ function AppLayout() {
       </header>
 
       <div className="app-layout">
-        <aside className="side-nav">
-          <NavLinkItem to="/home">Inicio</NavLinkItem>
-          <NavLinkItem to="/foods">Alimentos</NavLinkItem>
-          <NavLinkItem to="/recipes">Recetas</NavLinkItem>
-          <NavLinkItem to="/plan">Plan semanal</NavLinkItem>
-          <NavLinkItem to="/profile">Mi perfil</NavLinkItem>
-        </aside>
-
         <main className="app-content">
           <Outlet />
         </main>
@@ -70,8 +64,8 @@ function AppLayout() {
         <NavLinkItem to="/home">Inicio</NavLinkItem>
         <NavLinkItem to="/foods">Alimentos</NavLinkItem>
         <NavLinkItem to="/recipes">Recetas</NavLinkItem>
-        <NavLinkItem to="/plan">Plan</NavLinkItem>
-        <NavLinkItem to="/profile">Perfil</NavLinkItem>
+        <NavLinkItem to="/plan">Plan semanal</NavLinkItem>
+        <NavLinkItem to="/profile">Mi perfil</NavLinkItem>
       </nav>
     </div>
   );

@@ -3,7 +3,6 @@ import { createFood, deleteFood, fetchFoods } from "../services/api";
 
 export default function FoodsPage() {
   const [foods, setFoods] = useState([]);
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedFoodId, setExpandedFoodId] = useState(null);
@@ -35,11 +34,6 @@ export default function FoodsPage() {
   useEffect(() => {
     loadFoods();
   }, []);
-
-  function handleSearchSubmit(event) {
-    event.preventDefault();
-    loadFoods(search);
-  }
 
   function openModal() {
     setShowModal(true);
@@ -80,7 +74,7 @@ export default function FoodsPage() {
         fuente: formData.fuente,
       });
 
-      await loadFoods(search);
+      await loadFoods();
       closeModal();
     } catch (err) {
       setError(err.message);
@@ -98,7 +92,7 @@ export default function FoodsPage() {
 
     try {
       await deleteFood(foodId);
-      await loadFoods(search);
+      await loadFoods();
     } catch (err) {
       setError(err.message);
     }
@@ -125,16 +119,6 @@ export default function FoodsPage() {
           +
         </button>
       </div>
-
-      <form onSubmit={handleSearchSubmit} className="search-form">
-        <input
-          type="text"
-          placeholder="Buscar alimento"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <button type="submit">Buscar</button>
-      </form>
 
       {loading && <p>Cargando...</p>}
       {error && <p className="error-text">{error}</p>}
