@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { createFood, fetchFoods } from "../services/api";
+import { createFood, deleteFood, fetchFoods } from "../services/api";
 
 export default function FoodsPage() {
   const [foods, setFoods] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expandedFoodId, setExpandedFoodId] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -86,6 +87,27 @@ export default function FoodsPage() {
     }
   }
 
+  async function handleDeleteFood(foodId, foodName) {
+    const confirmed = globalThis.confirm(`¿Seguro que quieres eliminar "${foodName}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await deleteFood(foodId);
+      await loadFoods(search);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function toggleFoodDetails(foodId) {
+    setExpandedFoodId((prev) => (prev === foodId ? null : foodId));
+  }
+
   return (
     <div className="page">
       <div className="page-header page-header-row">
@@ -126,22 +148,45 @@ export default function FoodsPage() {
           ) : (
             foods.map((food) => (
               <div key={food.id} className="card">
-                <h3>{food.nombre}</h3>
-                <p>
-                  <strong>Calorías:</strong> {food.calorias}
-                </p>
-                <p>
-                  <strong>Proteínas:</strong> {food.proteinas} g
-                </p>
-                <p>
-                  <strong>Carbos:</strong> {food.carbos} g
-                </p>
-                <p>
-                  <strong>Grasas:</strong> {food.grasas} g
-                </p>
-                <p>
-                  <strong>Fuente:</strong> {food.fuente}
-                </p>
+                <button
+                  type="button"
+                  className="food-card-trigger"
+                  onClick={() => toggleFoodDetails(food.id)}
+                  aria-expanded={expandedFoodId === food.id}
+                >
+                  <span className="food-card-name">{food.nombre}</span>
+                  <span className="food-card-arrow" aria-hidden="true">
+                    {expandedFoodId === food.id ? "▲" : "▼"}
+                  </span>
+                </button>
+
+                {expandedFoodId === food.id && (
+                  <div className="food-card-details">
+                    <p>
+                      <strong>Calorías:</strong> {food.calorias}
+                    </p>
+                    <p>
+                      <strong>Proteínas:</strong> {food.proteinas} g
+                    </p>
+                    <p>
+                      <strong>Carbos:</strong> {food.carbos} g
+                    </p>
+                    <p>
+                      <strong>Grasas:</strong> {food.grasas} g
+                    </p>
+                    <p>
+                      <strong>Fuente:</strong> {food.fuente}
+                    </p>
+
+                    <button
+                      type="button"
+                      className="delete-button"
+                      onClick={() => handleDeleteFood(food.id, food.nombre)}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -149,8 +194,14 @@ export default function FoodsPage() {
       )}
 
       {showModal && (
-        <div className="modal-overlay" onClick={closeModal}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay">
+          <button
+            type="button"
+            className="modal-backdrop"
+            onClick={closeModal}
+            aria-label="Cerrar ventana de crear alimento"
+          />
+          <div className="modal-card">
             <div className="modal-header">
               <h3>Crear alimento</h3>
               <button

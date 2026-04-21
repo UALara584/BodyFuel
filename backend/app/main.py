@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from .database import Base, engine
 from . import models
@@ -11,9 +12,24 @@ from .routers.plans import router as plans_router
 from .routers.meals import router as meals_router
 from .routers.meal_items import router as meal_items_router
 
-Base.metadata.create_all(bind=engine)
-
 app = FastAPI()
+
+
+def ensure_user_auth_columns() -> None:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS password VARCHAR"))
+        connection.execute(
+            text(
+                "UPDATE users SET email = COALESCE(email, nombre, ''), password = COALESCE(password, objetivo, '')"
+            )
+        )
+        connection.execute(text("ALTER TABLE users ALTER COLUMN email SET NOT NULL"))
+        connection.execute(text("ALTER TABLE users ALTER COLUMN password SET NOT NULL"))
+
+
+Base.metadata.create_all(bind=engine)
+ensure_user_auth_columns()
 
 app.add_middleware(
     CORSMiddleware,

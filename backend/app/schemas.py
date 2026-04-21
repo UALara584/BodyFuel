@@ -3,12 +3,25 @@ from datetime import date
 
 
 class UserCreate(BaseModel):
+    email: str
+    password: str
     nombre: str
     edad: int
     peso: float
     altura: float
     objetivo: str
     calorias_objetivo: int
+
+
+class UserUpdate(BaseModel):
+    email: str | None = None
+    password: str | None = None
+    nombre: str | None = None
+    edad: int | None = None
+    peso: float | None = None
+    altura: float | None = None
+    objetivo: str | None = None
+    calorias_objetivo: int | None = None
 
 
 class UserResponse(UserCreate):

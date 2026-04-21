@@ -2,11 +2,15 @@ from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
 from sqlalchemy.orm import relationship
 from .database import Base
 
+CASCADE_DELETE = "all, delete"
+
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password = Column(String, nullable=False)
     nombre = Column(String, nullable=False)
     edad = Column(Integer)
     peso = Column(Float)
@@ -14,8 +18,8 @@ class User(Base):
     objetivo = Column(String)
     calorias_objetivo = Column(Integer)
 
-    tracking_entries = relationship("Tracking", back_populates="user", cascade="all, delete")
-    plans = relationship("WeeklyPlan", cascade="all, delete")
+    tracking_entries = relationship("Tracking", back_populates="user", cascade=CASCADE_DELETE)
+    plans = relationship("WeeklyPlan", cascade=CASCADE_DELETE)
 
 class Tracking(Base):
     __tablename__ = "tracking"
@@ -70,10 +74,10 @@ class Meal(Base):
     dia = Column(String, nullable=False)
     tipo_comida = Column(String, nullable=False)
     hora = Column(String, nullable=False)
-    items = relationship("MealItem", back_populates="meal", cascade="all, delete")
+    items = relationship("MealItem", back_populates="meal", cascade=CASCADE_DELETE)
 
     weekly_plan = relationship("WeeklyPlan", back_populates="meals")
-    items = relationship("MealItem", cascade="all, delete")
+    items = relationship("MealItem", cascade=CASCADE_DELETE)
     
 class MealItem(Base):
     __tablename__ = "meal_items"
