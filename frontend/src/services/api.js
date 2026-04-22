@@ -222,3 +222,15 @@ export async function clearAssistantHistory(userId) {
 
   return handleResponse(response, "Error al limpiar historial del asistente");
 }
+
+export async function createRecipe(recipeData) {
+  const response = await fetch(`${API_BASE_URL}/recipes/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(recipeData),
+  });
+
+  return handleResponse(response, "Error al crear receta");
+}

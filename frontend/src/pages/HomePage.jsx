@@ -95,12 +95,11 @@ export default function HomePage() {
           macrosByDate[dayDate].proteinas += Number(item.food.proteinas || 0) * qty;
           macrosByDate[dayDate].carbos += Number(item.food.carbos || 0) * qty;
           macrosByDate[dayDate].grasas += Number(item.food.grasas || 0) * qty;
-        } else if (item.recipe) {
-          const calories = Number(item.recipe.calorias_totales || 0) * qty;
-          macrosByDate[dayDate].proteinas += (calories * 0.3) / 4;
-          macrosByDate[dayDate].carbos += (calories * 0.4) / 4;
-          macrosByDate[dayDate].grasas += (calories * 0.3) / 9;
-        }
+       } else if (item.recipe) {
+  macrosByDate[dayDate].proteinas += Number(item.recipe.proteinas || 0) * qty;
+  macrosByDate[dayDate].carbos += Number(item.recipe.carbos || 0) * qty;
+  macrosByDate[dayDate].grasas += Number(item.recipe.grasas || 0) * qty;
+}
       }
     }
 

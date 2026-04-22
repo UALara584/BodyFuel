@@ -74,6 +74,9 @@ class RecipeCreate(BaseModel):
     nombre: str
     ingredientes: str
     calorias_totales: float
+    proteinas: float
+    carbos: float
+    grasas: float
     tiempo_preparacion: int
     tipo_dieta: str | None = None
     fuente_url: str | None = None
@@ -155,6 +158,9 @@ class RecipeMini(BaseModel):
     nombre: str
     ingredientes: str
     calorias_totales: float
+    proteinas: float
+    carbos: float
+    grasas: float
     tiempo_preparacion: int
     tipo_dieta: str | None = None
     fuente_url: str | None = None

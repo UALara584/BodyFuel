@@ -58,6 +58,9 @@ class Recipe(Base):
     fuente_url = Column(String, nullable=True)
     origen = Column(String, nullable=False)
     meal_items = relationship("MealItem", back_populates="recipe")
+    proteinas = Column(Float, nullable=False, default=0)
+    carbos = Column(Float, nullable=False, default=0)
+    grasas = Column(Float, nullable=False, default=0)
 
 class WeeklyPlan(Base):
     __tablename__ = "weekly_plans"

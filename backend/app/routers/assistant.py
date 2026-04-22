@@ -59,7 +59,8 @@ def get_db():
 def normalize_text(text: str) -> str:
     cleaned = unicodedata.normalize("NFKD", text.lower())
     cleaned = "".join(ch for ch in cleaned if not unicodedata.combining(ch))
-    cleaned = re.sub(r"[^a-z0-9\s]", " ", cleaned)
+    cleaned = cleaned.replace(",", ".")
+    cleaned = re.sub(r"[^a-z0-9.\s]", " ", cleaned)
     return re.sub(r"\s+", " ", cleaned).strip()
 
 
@@ -77,6 +78,34 @@ def metric_keywords(message: str) -> set[str]:
             found.add(metric)
 
     return found
+
+
+def extract_grams(message_norm: str) -> float | None:
+    patterns = [
+        r"(\d+(?:\.\d+)?)\s*g\b",
+        r"(\d+(?:\.\d+)?)\s*gr\b",
+        r"(\d+(?:\.\d+)?)\s*gramos?\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, message_norm)
+        if match:
+            try:
+                grams = float(match.group(1))
+                if grams > 0:
+                    return grams
+            except ValueError:
+                return None
+
+    return None
+
+
+def is_grams_query(message_norm: str) -> bool:
+    if extract_grams(message_norm) is not None:
+        return True
+
+    grams_keywords = ["gramo", "gramos", "g ", "gr ", "cuanto", "cuantas", "macros", "kcal"]
+    return any(word in message_norm for word in grams_keywords)
 
 
 def rank_matches_by_name(message_norm: str, entities: Iterable, max_results: int) -> list:
@@ -143,6 +172,16 @@ def format_recipe_line(recipe: Recipe) -> str:
     )
 
 
+def scale_food_by_grams(food: Food, grams: float) -> dict[str, float]:
+    factor = grams / 100.0
+    return {
+        "calorias": round(food.calorias * factor, 1),
+        "proteinas": round(food.proteinas * factor, 1),
+        "carbos": round(food.carbos * factor, 1),
+        "grasas": round(food.grasas * factor, 1),
+    }
+
+
 def save_message(
     db: Session,
     *,
@@ -207,6 +246,8 @@ def ask_external_llm(
     system_prompt = (
         "Eres un asistente nutricional para BodyFuel. "
         "Responde en espanol claro y practico usando solo los datos proporcionados. "
+        "Si el usuario pregunta por gramos de un alimento, asume que los valores nutricionales de alimentos "
+        "estan expresados por 100 g y calcula proporcionalmente. "
         "Si faltan datos, dilo explicitamente."
     )
 
@@ -292,8 +333,12 @@ def build_local_response(
 ) -> AssistantChatResponse:
     compare_requested = any(word in message_norm for word in ["compar", "vs", "versus", "mejor"])
     top_protein_requested = "mas prote" in message_norm or "alto en prote" in message_norm
-    low_cal_requested = "menos calor" in message_norm or "bajo en calor" in message_norm
+    low_cal_requested = "menos calor" in message_norm or "bajo en calor"
     recipe_hint = any(word in message_norm for word in ["receta", "recetas", "preparar", "cocinar"])
+    grams = extract_grams(message_norm)
+
+    if grams is not None and matched_foods:
+        return build_food_grams_response(message_norm, matched_foods[0], grams)
 
     if top_protein_requested:
         return build_rank_response(foods, max_results, rank_type="protein")
@@ -394,11 +439,11 @@ def chat_with_assistant(payload: AssistantChatRequest, db: Annotated[Session, De
 def build_rank_response(foods: list[Food], max_results: int, rank_type: str) -> AssistantChatResponse:
     if rank_type == "protein":
         top_foods = sorted(foods, key=lambda f: f.proteinas, reverse=True)[:max_results]
-        reply = "Top alimentos con mas proteinas por cada registro:\n"
+        reply = "Top alimentos con mas proteinas por cada 100 g:\n"
         intent = "top_protein"
     else:
         top_foods = sorted(foods, key=lambda f: f.calorias)[:max_results]
-        reply = "Alimentos con menos calorias:\n"
+        reply = "Alimentos con menos calorias por cada 100 g:\n"
         intent = "low_calories"
 
     reply += "\n".join(f"- {format_food_line(food)}" for food in top_foods)
@@ -413,7 +458,7 @@ def build_rank_response(foods: list[Food], max_results: int, rank_type: str) -> 
 
 def build_compare_response(a: Food, b: Food) -> AssistantChatResponse:
     reply_lines = [
-        f"Comparacion entre {a.nombre} y {b.nombre}:",
+        f"Comparacion entre {a.nombre} y {b.nombre} (por 100 g):",
         f"- Calorias: {a.calorias:.0f} vs {b.calorias:.0f} kcal",
         f"- Proteinas: {a.proteinas:.1f} vs {b.proteinas:.1f} g",
         f"- Carbos: {a.carbos:.1f} vs {b.carbos:.1f} g",
@@ -424,6 +469,40 @@ def build_compare_response(a: Food, b: Food) -> AssistantChatResponse:
         intent="compare",
         source="local",
         matched_foods=[a.nombre, b.nombre],
+        matched_recipes=[],
+    )
+
+
+def build_food_grams_response(message_norm: str, food: Food, grams: float) -> AssistantChatResponse:
+    requested_metrics = metric_keywords(message_norm)
+    scaled = scale_food_by_grams(food, grams)
+
+    if requested_metrics:
+        parts: list[str] = []
+        if "calorias" in requested_metrics:
+            parts.append(f"Calorias: {scaled['calorias']:.1f} kcal")
+        if "proteinas" in requested_metrics:
+            parts.append(f"Proteinas: {scaled['proteinas']:.1f} g")
+        if "carbos" in requested_metrics:
+            parts.append(f"Carbos: {scaled['carbos']:.1f} g")
+        if "grasas" in requested_metrics:
+            parts.append(f"Grasas: {scaled['grasas']:.1f} g")
+
+        reply = f"{food.nombre} para {grams:.0f} g -> " + " | ".join(parts)
+    else:
+        reply = (
+            f"{food.nombre} para {grams:.0f} g:\n"
+            f"- Calorias: {scaled['calorias']:.1f} kcal\n"
+            f"- Proteinas: {scaled['proteinas']:.1f} g\n"
+            f"- Carbos: {scaled['carbos']:.1f} g\n"
+            f"- Grasas: {scaled['grasas']:.1f} g"
+        )
+
+    return AssistantChatResponse(
+        reply=reply,
+        intent="food_grams_query",
+        source="local",
+        matched_foods=[food.nombre],
         matched_recipes=[],
     )
 
@@ -444,14 +523,16 @@ def build_food_info_response(message_norm: str, foods: list[Food]) -> AssistantC
             metric_text.append(f"Grasas: {food.grasas:.1f} g")
 
         return AssistantChatResponse(
-            reply=f"{food.nombre}: " + " | ".join(metric_text),
+            reply=f"{food.nombre} por 100 g: " + " | ".join(metric_text),
             intent="metric_query",
             source="local",
             matched_foods=[food.nombre],
             matched_recipes=[],
         )
 
-    reply = "Esto es lo que encontre:\n" + "\n".join(f"- {format_food_line(food)}" for food in foods)
+    reply = "Esto es lo que encontre (valores por 100 g):\n" + "\n".join(
+        f"- {format_food_line(food)}" for food in foods
+    )
     return AssistantChatResponse(
         reply=reply,
         intent="food_info",
@@ -483,9 +564,9 @@ def build_fallback_response(foods: list[Food], recipes: list[Recipe]) -> Assista
             "No encontre ese elemento exactamente. Puedes probar con preguntas como:\n"
             "- calorias de avena\n"
             "- proteinas del pollo\n"
+            "- macros de 150 g de arroz\n"
+            "- cuantas calorias tiene 200 gramos de platano\n"
             "- compara arroz vs quinoa\n\n"
-            "- receta con pollo\n"
-            "- receta baja en calorias\n\n"
             "Algunos alimentos disponibles ahora mismo:\n"
             + "\n".join(f"- {food.nombre}" for food in suggestions)
             + "\n\nRecetas destacadas:\n"

@@ -7,12 +7,14 @@ import {
 
 const INITIAL_MESSAGE = {
   role: "assistant",
-  text: "Hola, soy tu asistente nutricional. Preguntame sobre calorias, proteinas, carbos, grasas o comparaciones entre alimentos.",
+  text: "Hola, soy tu asistente nutricional. Puedo ayudarte con macros, calorías, comparaciones entre alimentos y cantidades en gramos.",
 };
 
 export default function AssistantPage() {
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id;
+  const userName = currentUser?.nombre || "Usuario";
+
   const [messages, setMessages] = useState([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -22,10 +24,11 @@ export default function AssistantPage() {
 
   const suggestions = useMemo(
     () => [
-      "Cuantas proteinas tiene la avena?",
+      "Macros de 150 g de avena",
       "Compara arroz vs quinoa",
-      "Que alimentos tienen menos calorias?",
-      "Cuales son los mas altos en proteina?",
+      "Qué alimentos tienen menos calorías",
+      "Cuáles son los más altos en proteína",
+      "Calorías de 200 gramos de plátano",
     ],
     []
   );
@@ -47,6 +50,7 @@ export default function AssistantPage() {
     async function loadHistory() {
       setLoadingHistory(true);
       setError("");
+
       try {
         const data = await fetchAssistantHistory(userId);
         const historyMessages = (data.items || []).map((item) => ({
@@ -102,6 +106,7 @@ export default function AssistantPage() {
 
     setLoading(true);
     setError("");
+
     try {
       await clearAssistantHistory(userId);
       setMessages([INITIAL_MESSAGE]);
@@ -115,12 +120,27 @@ export default function AssistantPage() {
 
   return (
     <div className="page assistant-page">
-      <div className="page-header">
-        <h2>Asistente IA Nutricional</h2>
-        <p>Haz preguntas sobre alimentos, macros y comparaciones nutricionales.</p>
+      <div className="page-header assistant-header">
+        <div>
+          <h2>Asistente IA Nutricional</h2>
+          <p>Pregunta por calorías, macros, comparaciones y cantidades concretas.</p>
+        </div>
+
+        <div className="assistant-user-pill">
+          <span className="assistant-user-dot" />
+          <strong>{userName}</strong>
+        </div>
       </div>
 
-      <div className="assistant-toolbar">
+      <section className="assistant-hero card">
+        <div className="assistant-hero-copy">
+          <h3>Tu asistente nutricional personal</h3>
+          <p>
+            Pregunta cosas como “macros de 150 g de arroz”, “compara pollo vs salmón”
+            o “qué alimentos tienen menos calorías”.
+          </p>
+        </div>
+
         <button
           type="button"
           className="assistant-clear-button"
@@ -129,7 +149,7 @@ export default function AssistantPage() {
         >
           Limpiar historial
         </button>
-      </div>
+      </section>
 
       <div className="assistant-shell card">
         <div className="assistant-chat" ref={chatScrollRef}>
@@ -138,11 +158,13 @@ export default function AssistantPage() {
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${index}`}
-              className={`assistant-bubble assistant-bubble-${message.role}`}
+              className={`assistant-row assistant-row-${message.role}`}
             >
-              {message.text.split("\n").map((line, lineIndex) => (
-                <p key={`${index}-line-${lineIndex}`}>{line}</p>
-              ))}
+              <div className={`assistant-bubble assistant-bubble-${message.role}`}>
+                {message.text.split("\n").map((line, lineIndex) => (
+                  <p key={`${index}-line-${lineIndex}`}>{line}</p>
+                ))}
+              </div>
             </div>
           ))}
 
@@ -167,7 +189,7 @@ export default function AssistantPage() {
         <form onSubmit={handleSubmit} className="assistant-form">
           <input
             type="text"
-            placeholder="Ej. calorias del pollo"
+            placeholder="Ej. macros de 150 g de avena"
             value={input}
             onChange={(event) => setInput(event.target.value)}
             disabled={loading}
