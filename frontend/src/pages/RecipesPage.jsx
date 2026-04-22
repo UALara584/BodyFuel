@@ -5,6 +5,7 @@ export default function RecipesPage() {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
 
   async function loadRecipes(nombre = "") {
     setLoading(true);
@@ -23,6 +24,14 @@ export default function RecipesPage() {
   useEffect(() => {
     loadRecipes();
   }, []);
+
+  function openRecipeModal(recipe) {
+    setSelectedRecipe(recipe);
+  }
+
+  function closeRecipeModal() {
+    setSelectedRecipe(null);
+  }
 
   return (
     <div className="page">
@@ -43,15 +52,63 @@ export default function RecipesPage() {
           ) : (
             recipes.map((recipe) => (
               <div key={recipe.id} className="card">
-                <h3>{recipe.nombre}</h3>
-                <p><strong>Ingredientes:</strong> {recipe.ingredientes}</p>
-                <p><strong>Calorías:</strong> {recipe.calorias_totales}</p>
-                <p><strong>Tiempo:</strong> {recipe.tiempo_preparacion} min</p>
-                <p><strong>Tipo dieta:</strong> {recipe.tipo_dieta || "No especificado"}</p>
-                <p><strong>Origen:</strong> {recipe.origen}</p>
+                <button
+                  type="button"
+                  className="food-card-trigger"
+                  onClick={() => openRecipeModal(recipe)}
+                  aria-label={`Ver detalle de la receta ${recipe.nombre}`}
+                >
+                  <span className="food-card-name">{recipe.nombre}</span>
+                  <span className="food-card-arrow" aria-hidden="true">
+                    Ver
+                  </span>
+                </button>
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {selectedRecipe && (
+        <div className="modal-overlay">
+          <button
+            type="button"
+            className="modal-backdrop"
+            onClick={closeRecipeModal}
+            aria-label="Cerrar ventana de receta"
+          />
+
+          <div className="modal-card">
+            <div className="modal-header">
+              <h3>{selectedRecipe.nombre}</h3>
+              <button
+                className="close-button"
+                onClick={closeRecipeModal}
+                type="button"
+                aria-label="Cerrar ventana"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="food-card-details">
+              <p>
+                <strong>Informacion adicional</strong>
+              </p>
+              <p>
+                <strong>Descripcion:</strong> {selectedRecipe.ingredientes || "No disponible"}
+              </p>
+
+              {selectedRecipe.fuente_url && (
+                <p>
+                  <strong>Enlace a la receta:</strong>{" "}
+                  <a href={selectedRecipe.fuente_url} target="_blank" rel="noreferrer">
+                    Ver receta original
+                  </a>
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -4,4 +4,6 @@ WORKDIR /app
 
 COPY . .
 
-CMD ["python", "-c", "print('Scraper container ready')"]
+RUN pip install --no-cache-dir -r requirements.txt
+
+CMD ["python", "scrape_vitonica.py"]

@@ -37,3 +37,5 @@ services:
     container_name: bodyfuel_scraper
     depends_on:
       - db
+    environment:
+      VITONICA_URLS: https://www.vitonica.com/categoria/recetas-saludables/record/20,https://www.vitonica.com/categoria/recetas-saludables/record/40,https://www.vitonica.com/categoria/recetas-saludables/record/60,https://www.vitonica.com/categoria/recetas-saludables/record/80,https://www.vitonica.com/categoria/recetas-saludables/record/100
