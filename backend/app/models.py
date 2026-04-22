@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, func
 from sqlalchemy.orm import relationship
 from .database import Base
 
 CASCADE_DELETE = "all, delete"
+USER_FK = "users.id"
 
 
 class User(Base):
@@ -20,12 +21,13 @@ class User(Base):
 
     tracking_entries = relationship("Tracking", back_populates="user", cascade=CASCADE_DELETE)
     plans = relationship("WeeklyPlan", cascade=CASCADE_DELETE)
+    assistant_messages = relationship("AssistantMessage", back_populates="user", cascade=CASCADE_DELETE)
 
 class Tracking(Base):
     __tablename__ = "tracking"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey(USER_FK), nullable=False)
     fecha = Column(Date, nullable=False)
     peso = Column(Float)
     calorias_consumidas = Column(Integer)
@@ -61,7 +63,7 @@ class WeeklyPlan(Base):
     __tablename__ = "weekly_plans"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey(USER_FK), nullable=False)
     semana_inicio = Column(Date, nullable=False)
 
     meals = relationship("Meal", back_populates="weekly_plan", cascade="all, delete")
@@ -92,3 +94,17 @@ class MealItem(Base):
     meal = relationship("Meal", back_populates="items")
     food = relationship("Food", back_populates="meal_items")
     recipe = relationship("Recipe", back_populates="meal_items")
+
+
+class AssistantMessage(Base):
+    __tablename__ = "assistant_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey(USER_FK), nullable=True, index=True)
+    role = Column(String, nullable=False)  # user | assistant
+    content = Column(Text, nullable=False)
+    intent = Column(String, nullable=True)
+    source = Column(String, nullable=True)  # local | llm
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    user = relationship("User", back_populates="assistant_messages")

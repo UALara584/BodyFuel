@@ -39,8 +39,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
+    <div className="auth-page auth-page--neon">
+      <div className="auth-card auth-card-elevated">
+        <div className="auth-topbar">
+          <p className="auth-kicker">BODYFUEL</p>
+          <span className="auth-chip">Acceso seguro</span>
+        </div>
+
         <h1>Iniciar sesión</h1>
         <p className="auth-subtitle">
           Accede con tu correo y contraseña para entrar a BodyFuel.
@@ -52,26 +57,30 @@ export default function LoginPage() {
 
         {error ? <p className="error-text">{error}</p> : null}
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label htmlFor="email">Correo</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Ej. correo@dominio.com"
-          />
+        <form onSubmit={handleSubmit} className="auth-form auth-form-spacious">
+          <div className="auth-field">
+            <label htmlFor="email">Correo</label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Ej. correo@dominio.com"
+            />
+          </div>
 
-          <label htmlFor="password">Contraseña</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Tu contraseña"
-          />
+          <div className="auth-field">
+            <label htmlFor="password">Contraseña</label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Tu contraseña"
+            />
+          </div>
 
-          <button type="submit" disabled={loading}>
+          <button type="submit" className="auth-primary-button" disabled={loading}>
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>

@@ -197,3 +197,28 @@ export async function updateUser(userId, userData) {
 
   return handleResponse(response, "Error al actualizar usuario");
 }
+
+export async function askNutritionAssistant(message, userId) {
+  const response = await fetch(`${API_BASE_URL}/assistant/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message, user_id: userId ?? null }),
+  });
+
+  return handleResponse(response, "Error al consultar el asistente");
+}
+
+export async function fetchAssistantHistory(userId, limit = 80) {
+  const response = await fetch(`${API_BASE_URL}/assistant/history/${userId}?limit=${limit}`);
+  return handleResponse(response, "Error al cargar historial del asistente");
+}
+
+export async function clearAssistantHistory(userId) {
+  const response = await fetch(`${API_BASE_URL}/assistant/history/${userId}`, {
+    method: "DELETE",
+  });
+
+  return handleResponse(response, "Error al limpiar historial del asistente");
+}

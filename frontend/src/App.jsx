@@ -4,6 +4,7 @@ import FoodsPage from "./pages/FoodsPage";
 import RecipesPage from "./pages/RecipesPage";
 import PlanPage from "./pages/PlanPage";
 import ProfilePage from "./pages/ProfilePage";
+import AssistantPage from "./pages/AssistantPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 
@@ -64,6 +65,7 @@ function AppLayout() {
         <NavLinkItem to="/home">Inicio</NavLinkItem>
         <NavLinkItem to="/foods">Alimentos</NavLinkItem>
         <NavLinkItem to="/recipes">Recetas</NavLinkItem>
+        <NavLinkItem to="/assistant">Asistente IA</NavLinkItem>
         <NavLinkItem to="/plan">Plan semanal</NavLinkItem>
         <NavLinkItem to="/profile">Mi perfil</NavLinkItem>
       </nav>
@@ -82,6 +84,7 @@ export default function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/foods" element={<FoodsPage />} />
           <Route path="/recipes" element={<RecipesPage />} />
+          <Route path="/assistant" element={<AssistantPage />} />
           <Route path="/plan" element={<PlanPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Route>

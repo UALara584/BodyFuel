@@ -79,119 +79,142 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="auth-page">
-      <div className="auth-card auth-card-large">
+    <div className="auth-page auth-page--neon">
+      <div className="auth-card auth-card-large auth-card-elevated">
+        <div className="auth-topbar">
+          <p className="auth-kicker">BODYFUEL</p>
+          <span className="auth-chip">Nuevo perfil</span>
+        </div>
+
         <h1>Registro</h1>
         <p className="auth-subtitle">Crea tu cuenta con tus datos personales y acceso.</p>
 
         {error ? <p className="error-text">{error}</p> : null}
 
-        <form onSubmit={handleSubmit} className="auth-form auth-grid-form">
-          <label htmlFor="email">Correo</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            placeholder="correo@dominio.com"
-            required
-          />
+        <form onSubmit={handleSubmit} className="auth-form auth-grid-form auth-form-spacious">
+          <div className="auth-field">
+            <label htmlFor="email">Correo</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="correo@dominio.com"
+              required
+            />
+          </div>
 
-          <label htmlFor="password">Contraseña</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder="Mínimo 6 caracteres"
-            required
-          />
+          <div className="auth-field">
+            <label htmlFor="password">Contraseña</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="Mínimo 6 caracteres"
+              required
+            />
+          </div>
 
-          <label htmlFor="confirmPassword">Confirmar contraseña</label>
-          <input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-            required
-          />
+          <div className="auth-field">
+            <label htmlFor="confirmPassword">Confirmar contraseña</label>
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type="password"
+              value={formData.confirmPassword}
+              onChange={handleChange}
+              required
+            />
+          </div>
 
-          <label htmlFor="nombre">Nombre</label>
-          <input
-            id="nombre"
-            name="nombre"
-            type="text"
-            value={formData.nombre}
-            onChange={handleChange}
-            placeholder="Tu nombre"
-            required
-          />
+          <div className="auth-field">
+            <label htmlFor="nombre">Nombre</label>
+            <input
+              id="nombre"
+              name="nombre"
+              type="text"
+              value={formData.nombre}
+              onChange={handleChange}
+              placeholder="Tu nombre"
+              required
+            />
+          </div>
 
-          <label htmlFor="edad">Edad</label>
-          <input
-            id="edad"
-            name="edad"
-            type="number"
-            min="0"
-            value={formData.edad}
-            onChange={handleChange}
-            placeholder="Ej. 28"
-            required
-          />
+          <div className="auth-field">
+            <label htmlFor="edad">Edad</label>
+            <input
+              id="edad"
+              name="edad"
+              type="number"
+              min="0"
+              value={formData.edad}
+              onChange={handleChange}
+              placeholder="Ej. 28"
+              required
+            />
+          </div>
 
-          <label htmlFor="peso">Peso (kg)</label>
-          <input
-            id="peso"
-            name="peso"
-            type="number"
-            min="0"
-            step="0.1"
-            value={formData.peso}
-            onChange={handleChange}
-            placeholder="Ej. 72.5"
-            required
-          />
+          <div className="auth-field">
+            <label htmlFor="peso">Peso (kg)</label>
+            <input
+              id="peso"
+              name="peso"
+              type="number"
+              min="0"
+              step="0.1"
+              value={formData.peso}
+              onChange={handleChange}
+              placeholder="Ej. 72.5"
+              required
+            />
+          </div>
 
-          <label htmlFor="altura">Altura (cm)</label>
-          <input
-            id="altura"
-            name="altura"
-            type="number"
-            min="0"
-            step="0.1"
-            value={formData.altura}
-            onChange={handleChange}
-            placeholder="Ej. 175"
-            required
-          />
+          <div className="auth-field">
+            <label htmlFor="altura">Altura (cm)</label>
+            <input
+              id="altura"
+              name="altura"
+              type="number"
+              min="0"
+              step="0.1"
+              value={formData.altura}
+              onChange={handleChange}
+              placeholder="Ej. 175"
+              required
+            />
+          </div>
 
-          <label htmlFor="objetivo">Objetivo</label>
-          <input
-            id="objetivo"
-            name="objetivo"
-            type="text"
-            value={formData.objetivo}
-            onChange={handleChange}
-            placeholder="Ej. Definición"
-            required
-          />
+          <div className="auth-field">
+            <label htmlFor="objetivo">Objetivo</label>
+            <input
+              id="objetivo"
+              name="objetivo"
+              type="text"
+              value={formData.objetivo}
+              onChange={handleChange}
+              placeholder="Ej. Definición"
+              required
+            />
+          </div>
 
-          <label htmlFor="calorias_objetivo">Calorías objetivo</label>
-          <input
-            id="calorias_objetivo"
-            name="calorias_objetivo"
-            type="number"
-            min="0"
-            value={formData.calorias_objetivo}
-            onChange={handleChange}
-            placeholder="Ej. 2200"
-            required
-          />
+          <div className="auth-field auth-field-full">
+            <label htmlFor="calorias_objetivo">Calorías objetivo</label>
+            <input
+              id="calorias_objetivo"
+              name="calorias_objetivo"
+              type="number"
+              min="0"
+              value={formData.calorias_objetivo}
+              onChange={handleChange}
+              placeholder="Ej. 2200"
+              required
+            />
+          </div>
 
-          <button type="submit" disabled={loading}>
+          <button type="submit" className="auth-primary-button" disabled={loading}>
             {loading ? "Registrando..." : "Crear cuenta"}
           </button>
         </form>
