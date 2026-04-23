@@ -8,6 +8,13 @@ services:
       POSTGRES_DB: bodyfuel
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bodyfuel -d bodyfuel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   redis:
     image: redis:7
@@ -21,8 +28,10 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     environment:
       EDAMAM_APP_ID: cea4c385
       EDAMAM_APP_KEY: de2b210d707f9956a9126c66d18d05c3
@@ -39,6 +48,12 @@ services:
     build: ./scraper
     container_name: bodyfuel_scraper
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
     environment:
       VITONICA_URLS: https://www.vitonica.com/categoria/recetas-saludables/record/20,https://www.vitonica.com/categoria/recetas-saludables/record/40,https://www.vitonica.com/categoria/recetas-saludables/record/60,https://www.vitonica.com/categoria/recetas-saludables/record/80,https://www.vitonica.com/categoria/recetas-saludables/record/100
+
+volumes:
+  postgres_data:

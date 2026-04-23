@@ -1,3 +1,6 @@
+import time
+from sqlalchemy.exc import OperationalError
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -30,7 +33,11 @@ def ensure_user_auth_columns() -> None:
         connection.execute(text("ALTER TABLE users ALTER COLUMN email SET NOT NULL"))
         connection.execute(text("ALTER TABLE users ALTER COLUMN password SET NOT NULL"))
 
-
+def ensure_food_user_column() -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE foods ADD COLUMN IF NOT EXISTS user_id INTEGER")
+        )
 
 DEFAULT_FOODS = [
     # Cereales y granos
@@ -198,10 +205,23 @@ def ensure_recipe_macro_columns() -> None:
         connection.execute(text("ALTER TABLE recipes ALTER COLUMN grasas SET NOT NULL"))
         
         
-Base.metadata.create_all(bind=engine)
-ensure_user_auth_columns()
-ensure_recipe_macro_columns()
-ensure_default_foods()
+def initialize_database(retries: int = 20, delay: int = 3) -> None:
+    for attempt in range(1, retries + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            ensure_user_auth_columns()
+            ensure_recipe_macro_columns()
+            ensure_default_foods()
+            print("Base de datos inicializada correctamente")
+            return
+        except OperationalError:
+            print(f"Intento {attempt}/{retries}: esperando a PostgreSQL...")
+            if attempt == retries:
+                raise
+            time.sleep(delay)
+
+
+initialize_database()
 
 app.add_middleware(
     CORSMiddleware,
@@ -215,6 +235,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+Base.metadata.create_all(bind=engine)
+ensure_user_auth_columns()
+ensure_recipe_macro_columns()
+ensure_food_user_column()
+ensure_default_foods()
 
 app.include_router(users_router)
 app.include_router(tracking_router)

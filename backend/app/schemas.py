@@ -206,3 +206,18 @@ class FoodImportFromApi(BaseModel):
     carbos: float
     grasas: float
     fuente: str = "api"
+    user_id: int | None = None
+
+
+class RecipeItemCreate(BaseModel):
+    food_id: int
+    gramos: float
+
+
+class RecipeCreateWithItems(BaseModel):
+    nombre: str
+    ingredientes: str | None = None
+    tiempo_preparacion: int = 0
+    tipo_dieta: str | None = None
+    user_id: int | None = None
+    items: list[RecipeItemCreate]

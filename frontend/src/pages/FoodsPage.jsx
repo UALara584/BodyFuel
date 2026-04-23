@@ -7,15 +7,17 @@ import {
 } from "../services/api";
 
 export default function FoodsPage() {
+  const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
+  const userId = currentUser?.id ?? null;
+
   const [foods, setFoods] = useState([]);
+  const [externalFoods, setExternalFoods] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const [externalFoods, setExternalFoods] = useState([]);
   const [externalLoading, setExternalLoading] = useState(false);
+  const [error, setError] = useState("");
   const [externalError, setExternalError] = useState("");
-  const [showExternalResults, setShowExternalResults] = useState(false);
+  const [activeTab, setActiveTab] = useState("local");
   const [savingFoodName, setSavingFoodName] = useState("");
 
   const [showModal, setShowModal] = useState(false);
@@ -28,55 +30,46 @@ export default function FoodsPage() {
     fuente: "manual",
   });
 
-  async function loadFoods(nombre = "") {
+  async function loadFoodsAndApi(nombre = "") {
     setLoading(true);
+    setExternalLoading(true);
     setError("");
+    setExternalError("");
 
     try {
-      const data = await fetchFoods(nombre);
-      setFoods(data);
-    } catch (err) {
-      setError(err.message);
+      const [localData, externalData] = await Promise.allSettled([
+        fetchFoods(nombre, userId),
+        nombre.trim() ? fetchExternalFoods(nombre) : Promise.resolve([]),
+      ]);
+
+      if (localData.status === "fulfilled") {
+        setFoods(localData.value || []);
+      } else {
+        setFoods([]);
+        setError(localData.reason?.message || "Error al cargar alimentos de BodyFuel");
+      }
+
+      if (externalData.status === "fulfilled") {
+        setExternalFoods(externalData.value || []);
+      } else {
+        setExternalFoods([]);
+        setExternalError(
+          externalData.reason?.message || "Error al buscar alimentos en API externa"
+        );
+      }
     } finally {
       setLoading(false);
+      setExternalLoading(false);
     }
   }
 
   useEffect(() => {
-    loadFoods();
-  }, []);
+    loadFoodsAndApi();
+  }, [userId]);
 
   function handleSearchSubmit(event) {
     event.preventDefault();
-    setShowExternalResults(false);
-    setExternalFoods([]);
-    setExternalError("");
-    loadFoods(search);
-  }
-
-  async function handleSearchExternalFoods() {
-    const query = search.trim();
-
-    if (!query) {
-      setExternalError("Escribe un alimento para buscar en la API.");
-      setShowExternalResults(true);
-      setExternalFoods([]);
-      return;
-    }
-
-    setExternalLoading(true);
-    setExternalError("");
-    setShowExternalResults(true);
-
-    try {
-      const data = await fetchExternalFoods(query);
-      setExternalFoods(data || []);
-    } catch (err) {
-      setExternalError(err.message);
-      setExternalFoods([]);
-    } finally {
-      setExternalLoading(false);
-    }
+    loadFoodsAndApi(search);
   }
 
   async function handleImportFood(food) {
@@ -91,9 +84,11 @@ export default function FoodsPage() {
         carbos: Number(food.carbos || 0),
         grasas: Number(food.grasas || 0),
         fuente: "api",
+        user_id: userId,
       });
 
-      await loadFoods(search);
+      await loadFoodsAndApi(search);
+      setActiveTab("local");
     } catch (err) {
       setExternalError(err.message);
     } finally {
@@ -138,12 +133,16 @@ export default function FoodsPage() {
         carbos: Number(formData.carbos),
         grasas: Number(formData.grasas),
         fuente: formData.fuente,
+        user_id: userId,
       });
 
-      await loadFoods(search);
+      await loadFoodsAndApi(search);
       closeModal();
+      setActiveTab("local");
     } catch (err) {
       setError(err.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -152,7 +151,7 @@ export default function FoodsPage() {
       <div className="page-header page-header-row">
         <div>
           <h2>Alimentos</h2>
-          <p>Busca alimentos, revisa sus macros y amplía tu base con la API externa.</p>
+          <p>Busca en BodyFuel y en la API externa desde un único buscador.</p>
         </div>
 
         <button className="add-button" onClick={openModal} type="button">
@@ -170,55 +169,63 @@ export default function FoodsPage() {
         <button type="submit">Buscar</button>
       </form>
 
-      <div className="external-search-row">
+      <div className="foods-tabs">
         <button
           type="button"
-          className="secondary-action-button"
-          onClick={handleSearchExternalFoods}
+          className={`foods-tab ${activeTab === "local" ? "active" : ""}`}
+          onClick={() => setActiveTab("local")}
         >
-          Buscar en API
+          BodyFuel
+          <span className="foods-tab-count">{foods.length}</span>
+        </button>
+
+        <button
+          type="button"
+          className={`foods-tab ${activeTab === "api" ? "active" : ""}`}
+          onClick={() => setActiveTab("api")}
+        >
+          API externa
+          <span className="foods-tab-count">{externalFoods.length}</span>
         </button>
       </div>
 
-      {loading && <p>Cargando...</p>}
-      {error && <p className="error-text">{error}</p>}
+      {activeTab === "local" && (
+        <section className="foods-results-section">
+          {loading && <p>Cargando alimentos de BodyFuel...</p>}
+          {error && <p className="error-text">{error}</p>}
 
-      {!loading && !error && (
-        <div className="grid-cards">
-          {foods.length === 0 ? (
-            <div className="card">
-              <p>No hay alimentos locales para mostrar.</p>
+          {!loading && !error && (
+            <div className="grid-cards">
+              {foods.length === 0 ? (
+                <div className="card">
+                  <p>No hay alimentos en BodyFuel con esa búsqueda.</p>
+                </div>
+              ) : (
+                foods.map((food) => (
+                  <div key={food.id} className="card">
+                    <h3>{food.nombre}</h3>
+                    <p><strong>Calorías:</strong> {food.calorias}</p>
+                    <p><strong>Proteínas:</strong> {food.proteinas} g</p>
+                    <p><strong>Carbos:</strong> {food.carbos} g</p>
+                    <p><strong>Grasas:</strong> {food.grasas} g</p>
+                  </div>
+                ))
+              )}
             </div>
-          ) : (
-            foods.map((food) => (
-              <div key={food.id} className="card">
-                <h3>{food.nombre}</h3>
-                <p><strong>Calorías:</strong> {food.calorias}</p>
-                <p><strong>Proteínas:</strong> {food.proteinas} g</p>
-                <p><strong>Carbos:</strong> {food.carbos} g</p>
-                <p><strong>Grasas:</strong> {food.grasas} g</p>
-                <p><strong>Fuente:</strong> {food.fuente}</p>
-              </div>
-            ))
           )}
-        </div>
+        </section>
       )}
 
-      {showExternalResults && (
-        <section className="external-foods-section">
-          <div className="page-header">
-            <h3>Resultados de API externa</h3>
-            <p>Selecciona uno para guardarlo en BodyFuel.</p>
-          </div>
-
-          {externalLoading && <p>Cargando API externa...</p>}
+      {activeTab === "api" && (
+        <section className="foods-results-section">
+          {externalLoading && <p>Cargando alimentos de la API...</p>}
           {externalError && <p className="error-text">{externalError}</p>}
 
           {!externalLoading && !externalError && (
             <div className="grid-cards">
               {externalFoods.length === 0 ? (
                 <div className="card">
-                  <p>No hay resultados en la API externa.</p>
+                  <p>No hay resultados en la API externa para esa búsqueda.</p>
                 </div>
               ) : (
                 externalFoods.map((food, index) => (

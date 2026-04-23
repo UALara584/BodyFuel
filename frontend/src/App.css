@@ -2115,3 +2115,190 @@ html body {
   cursor: not-allowed;
   transform: none;
 }
+
+.plan-library-sections {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.plan-library-section,
+.plan-library-subsection {
+  display: grid;
+  gap: 10px;
+}
+
+.plan-section-toggle,
+.plan-subsection-toggle {
+  width: 100%;
+  border: 1px solid rgba(173, 193, 255, 0.18);
+  background: rgba(20, 29, 45, 0.7);
+  color: #eef4ff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.plan-section-toggle:hover,
+.plan-subsection-toggle:hover {
+  background: rgba(36, 50, 80, 0.82);
+  border-color: rgba(173, 193, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.plan-subsections {
+  display: grid;
+  gap: 12px;
+  padding-left: 6px;
+}
+
+.plan-subsection-toggle {
+  background: rgba(16, 23, 37, 0.75);
+  font-size: 0.95rem;
+}
+
+.plan-draggable-list {
+  display: grid;
+  gap: 10px;
+  max-height: 240px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.plan-draggable-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.plan-draggable-list::-webkit-scrollbar-thumb {
+  background: rgba(173, 193, 255, 0.22);
+  border-radius: 999px;
+}
+
+.plan-draggable-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(173, 193, 255, 0.35);
+}
+.foods-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.foods-tab {
+  border: 1px solid rgba(173, 193, 255, 0.22);
+  background: rgba(20, 29, 45, 0.72);
+  color: #dbe6ff;
+  padding: 11px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+
+.foods-tab:hover {
+  background: rgba(36, 50, 80, 0.82);
+  border-color: rgba(173, 193, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+.foods-tab.active {
+  background: linear-gradient(135deg, #324d82, #4f69bf);
+  color: #f8fbff;
+  border-color: rgba(173, 196, 255, 0.38);
+  box-shadow: 0 10px 20px rgba(73, 102, 181, 0.24);
+}
+
+.foods-tab-count {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.82rem;
+}
+
+.foods-results-section {
+  display: grid;
+  gap: 14px;
+}
+.recipe-builder-form {
+  gap: 16px;
+}
+
+.recipe-builder-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recipe-builder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.recipe-builder-row select,
+.recipe-builder-row input {
+  width: 100%;
+  min-width: 0;
+}
+
+.recipe-remove-button {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #7d2145, #992d56);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recipe-remove-button:hover {
+  background: linear-gradient(135deg, #8f2750, #ac3761);
+}
+
+.recipe-totals-box {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.recipe-totals-box div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(20, 29, 45, 0.72);
+  border: 1px solid rgba(173, 193, 255, 0.18);
+}
+
+.recipe-totals-box span {
+  font-size: 0.86rem;
+  color: #b4bfd8;
+}
+
+.recipe-totals-box strong {
+  color: #f8fbff;
+  font-size: 1rem;
+}
+
+@media (max-width: 760px) {
+  .recipe-builder-row {
+    grid-template-columns: 1fr;
+  }
+
+  .recipe-totals-box {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

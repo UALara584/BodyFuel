@@ -45,6 +45,8 @@ class Food(Base):
     grasas = Column(Float, nullable=False)
     fuente = Column(String, nullable=False)
     meal_items = relationship("MealItem", back_populates="food")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user = relationship("User")
     
 class Recipe(Base):
     __tablename__ = "recipes"
@@ -61,7 +63,19 @@ class Recipe(Base):
     proteinas = Column(Float, nullable=False, default=0)
     carbos = Column(Float, nullable=False, default=0)
     grasas = Column(Float, nullable=False, default=0)
+    items = relationship("RecipeItem", back_populates="recipe", cascade="all, delete-orphan")
 
+class RecipeItem(Base):
+    __tablename__ = "recipe_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
+    food_id = Column(Integer, ForeignKey("foods.id"), nullable=False)
+    gramos = Column(Float, nullable=False, default=100)
+
+    recipe = relationship("Recipe", back_populates="items")
+    food = relationship("Food")
+    
 class WeeklyPlan(Base):
     __tablename__ = "weekly_plans"
 

@@ -7,6 +7,7 @@ from typing import List, Tuple
 import psycopg2
 import requests
 from bs4 import BeautifulSoup
+from psycopg2.errors import UndefinedTable
 
 SOURCE_URLS = [
     "https://www.vitonica.com/categoria/recetas-saludables/record/20",
@@ -15,6 +16,7 @@ SOURCE_URLS = [
     "https://www.vitonica.com/categoria/recetas-saludables/record/80",
     "https://www.vitonica.com/categoria/recetas-saludables/record/100",
 ]
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -120,11 +122,27 @@ def wait_for_db(db_url: str, retries: int = 30, delay_seconds: int = 2) -> None:
     for attempt in range(1, retries + 1):
         try:
             with psycopg2.connect(db_url):
+                print("Conexion con la base de datos establecida")
                 return
         except psycopg2.OperationalError:
             if attempt == retries:
                 raise
             print(f"DB no disponible (intento {attempt}/{retries}), reintentando...")
+            time.sleep(delay_seconds)
+
+
+def wait_for_recipes_table(db_url: str, retries: int = 30, delay_seconds: int = 2) -> None:
+    for attempt in range(1, retries + 1):
+        try:
+            with psycopg2.connect(db_url) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 1 FROM recipes LIMIT 1")
+                    print("Tabla recipes lista")
+                    return
+        except (psycopg2.OperationalError, UndefinedTable):
+            if attempt == retries:
+                raise
+            print(f"Tabla recipes no disponible (intento {attempt}/{retries}), reintentando...")
             time.sleep(delay_seconds)
 
 
@@ -152,21 +170,27 @@ def insert_recipes(db_url: str, rows: List[Tuple[str, str, str]]) -> tuple[int, 
                         nombre,
                         ingredientes,
                         calorias_totales,
+                        proteinas,
+                        carbos,
+                        grasas,
                         tiempo_preparacion,
                         tipo_dieta,
                         fuente_url,
                         origen
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         title,
                         ingredients,
                         calories,
+                        0.0,
+                        0.0,
+                        0.0,
                         minutes,
                         diet_type,
                         recipe_url,
-                        "Vitonica",
+                        "scraping",
                     ),
                 )
                 inserted += 1
@@ -201,6 +225,8 @@ def main() -> int:
         return 1
 
     wait_for_db(db_url)
+    wait_for_recipes_table(db_url)
+
     inserted, skipped = insert_recipes(db_url, recipes)
 
     print(f"Importacion completada. Insertadas: {inserted} | Omitidas (duplicadas): {skipped}")

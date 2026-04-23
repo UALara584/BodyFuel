@@ -8,13 +8,19 @@ async function handleResponse(response, errorMessage) {
   return response.json();
 }
 
-export async function fetchFoods(nombre = "") {
-  const url = nombre
-    ? `${API_BASE_URL}/foods/?nombre=${encodeURIComponent(nombre)}`
-    : `${API_BASE_URL}/foods/`;
+export async function fetchFoods(nombre = "", userId = null) {
+  const params = new URLSearchParams();
 
-  const response = await fetch(url);
-  return handleResponse(response, "Error al obtener alimentos");
+  if (nombre) {
+    params.append("nombre", nombre);
+  }
+
+  if (userId !== null && userId !== undefined) {
+    params.append("user_id", userId);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/foods/?${params.toString()}`);
+  return handleResponse(response, "Error al cargar alimentos");
 }
 
 export async function fetchRecipes(nombre = "", tipoDieta = "") {
@@ -253,4 +259,15 @@ export async function importFoodFromApi(foodData) {
   });
 
   return handleResponse(response, "Error al guardar alimento desde API");
+}
+export async function createRecipeWithItems(recipeData) {
+  const response = await fetch(`${API_BASE_URL}/recipes/with-items`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(recipeData),
+  });
+
+  return handleResponse(response, "Error al crear receta con alimentos");
 }

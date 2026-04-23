@@ -43,6 +43,11 @@ export default function PlanPage() {
   const [activeDropDay, setActiveDropDay] = useState("");
   const [activeDropHour, setActiveDropHour] = useState("");
 
+  const [showFoods, setShowFoods] = useState(false);
+const [showRecipes, setShowRecipes] = useState(false);
+const [showManualRecipes, setShowManualRecipes] = useState(false);
+const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
+
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id;
   const weekStart = getCurrentWeekMonday();
@@ -91,12 +96,14 @@ export default function PlanPage() {
     loadPlanAndLibrary();
   }, [userId]);
 
-  const draggableLibrary = useMemo(
-    () => [
-      ...foods.map((food) => ({ kind: "food", id: food.id, nombre: food.nombre })),
-      ...recipes.map((recipe) => ({ kind: "recipe", id: recipe.id, nombre: recipe.nombre })),
-    ],
-    [foods, recipes]
+  const manualRecipes = useMemo(
+    () => recipes.filter((recipe) => (recipe.origen || "").toLowerCase() === "manual"),
+    [recipes]
+  );
+
+  const scrapingRecipes = useMemo(
+    () => recipes.filter((recipe) => (recipe.origen || "").toLowerCase() !== "manual"),
+    [recipes]
   );
 
   const mealsByDay = useMemo(() => {
@@ -154,7 +161,10 @@ export default function PlanPage() {
         food_id: dragged.kind === "food" ? dragged.id : null,
         recipe_id: dragged.kind === "recipe" ? dragged.id : null,
         cantidad: 1,
-        notas: dragged.kind === "food" ? "Añadido desde calendario" : "Receta añadida desde calendario",
+        notas:
+          dragged.kind === "food"
+            ? "Añadido desde calendario"
+            : "Receta añadida desde calendario",
       });
 
       await loadPlanAndLibrary();
@@ -196,25 +206,134 @@ export default function PlanPage() {
       <section className="plan-board">
         <aside className="card plan-library">
           <h3>Comidas disponibles</h3>
-          <p>Arrastra un elemento al día y hora deseados.</p>
+          <p>Organiza por categorías y arrastra al horario deseado.</p>
 
-          <div className="plan-draggable-list">
-            {draggableLibrary.length === 0 ? (
-              <p className="item-note">No hay alimentos ni recetas todavía.</p>
-            ) : (
-              draggableLibrary.map((item) => (
-                <button
-                  key={`${item.kind}-${item.id}`}
-                  type="button"
-                  draggable
-                  className="plan-draggable-item"
-                  onDragStart={(event) => handleDragStart(item, event)}
-                >
-                  <strong>{item.nombre}</strong>
-                  <span>{item.kind === "food" ? "Alimento" : "Receta"}</span>
-                </button>
-              ))
-            )}
+          <div className="plan-library-sections">
+            <div className="plan-library-section">
+              <button
+                type="button"
+                className="plan-section-toggle"
+                onClick={() => setShowFoods((prev) => !prev)}
+              >
+                <span>Alimentos</span>
+                <span>{showFoods ? "−" : "+"}</span>
+              </button>
+
+              {showFoods && (
+                <div className="plan-draggable-list">
+                  {foods.length === 0 ? (
+                    <p className="item-note">No hay alimentos disponibles.</p>
+                  ) : (
+                    foods.map((food) => (
+                      <button
+                        key={`food-${food.id}`}
+                        type="button"
+                        draggable
+                        className="plan-draggable-item"
+                        onDragStart={(event) =>
+                          handleDragStart(
+                            { kind: "food", id: food.id, nombre: food.nombre },
+                            event
+                          )
+                        }
+                      >
+                        <strong>{food.nombre}</strong>
+                        <span>Alimento</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="plan-library-section">
+              <button
+                type="button"
+                className="plan-section-toggle"
+                onClick={() => setShowRecipes((prev) => !prev)}
+              >
+                <span>Recetas</span>
+                <span>{showRecipes ? "−" : "+"}</span>
+              </button>
+
+              {showRecipes && (
+                <div className="plan-subsections">
+                  <div className="plan-library-subsection">
+                    <button
+                      type="button"
+                      className="plan-subsection-toggle"
+                      onClick={() => setShowManualRecipes((prev) => !prev)}
+                    >
+                      <span>Mis recetas</span>
+                      <span>{showManualRecipes ? "−" : "+"}</span>
+                    </button>
+
+                    {showManualRecipes && (
+                      <div className="plan-draggable-list">
+                        {manualRecipes.length === 0 ? (
+                          <p className="item-note">No tienes recetas manuales todavía.</p>
+                        ) : (
+                          manualRecipes.map((recipe) => (
+                            <button
+                              key={`manual-recipe-${recipe.id}`}
+                              type="button"
+                              draggable
+                              className="plan-draggable-item"
+                              onDragStart={(event) =>
+                                handleDragStart(
+                                  { kind: "recipe", id: recipe.id, nombre: recipe.nombre },
+                                  event
+                                )
+                              }
+                            >
+                              <strong>{recipe.nombre}</strong>
+                              <span>Mi receta</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="plan-library-subsection">
+                    <button
+                      type="button"
+                      className="plan-subsection-toggle"
+                      onClick={() => setShowScrapingRecipes((prev) => !prev)}
+                    >
+                      <span>Recetas scraping</span>
+                      <span>{showScrapingRecipes ? "−" : "+"}</span>
+                    </button>
+
+                    {showScrapingRecipes && (
+                      <div className="plan-draggable-list">
+                        {scrapingRecipes.length === 0 ? (
+                          <p className="item-note">No hay recetas scrapeadas disponibles.</p>
+                        ) : (
+                          scrapingRecipes.map((recipe) => (
+                            <button
+                              key={`scraping-recipe-${recipe.id}`}
+                              type="button"
+                              draggable
+                              className="plan-draggable-item"
+                              onDragStart={(event) =>
+                                handleDragStart(
+                                  { kind: "recipe", id: recipe.id, nombre: recipe.nombre },
+                                  event
+                                )
+                              }
+                            >
+                              <strong>{recipe.nombre}</strong>
+                              <span>Receta scraping</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </aside>
 

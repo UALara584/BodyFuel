@@ -1,113 +1,68 @@
+
 import { useEffect, useMemo, useState } from "react";
-import { createRecipe, fetchRecipes } from "../services/api";
+import {
+  createRecipeWithItems,
+  fetchFoods,
+  fetchRecipes,
+} from "../services/api";
+
+function emptyRecipeItem() {
+  return {
+    food_id: "",
+    gramos: "",
+  };
+}
 
 export default function RecipesPage() {
+  const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
+  const userId = currentUser?.id ?? null;
+
   const [recipes, setRecipes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [foods, setFoods] = useState([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("manual");
+  const [expandedRecipeId, setExpandedRecipeId] = useState(null);
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [foodsLoading, setFoodsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [showModal, setShowModal] = useState(false);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+
   const [formData, setFormData] = useState({
     nombre: "",
     ingredientes: "",
-    calorias_totales: "",
-    proteinas: "",
-    carbos: "",
-    grasas: "",
     tiempo_preparacion: "",
     tipo_dieta: "",
-    fuente_url: "",
-    origen: "manual",
   });
 
-  async function loadRecipes(nombre = "") {
+  const [recipeItems, setRecipeItems] = useState([emptyRecipeItem()]);
+
+  async function loadRecipesAndFoods() {
     setLoading(true);
+    setFoodsLoading(true);
     setError("");
 
     try {
-      const data = await fetchRecipes(nombre);
-      setRecipes(data);
+      const [recipesData, foodsData] = await Promise.all([
+        fetchRecipes(),
+        fetchFoods("", userId),
+      ]);
+
+      setRecipes(recipesData || []);
+      setFoods(foodsData || []);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Error al cargar recetas y alimentos");
     } finally {
       setLoading(false);
+      setFoodsLoading(false);
     }
   }
 
   useEffect(() => {
-    loadRecipes();
-  }, []);
-
-  function handleSearchSubmit(event) {
-    event.preventDefault();
-    loadRecipes(search);
-  }
-
-  function openRecipeModal(recipe) {
-    setSelectedRecipe(recipe);
-  }
-
-  function closeRecipeModal() {
-    setSelectedRecipe(null);
-  }
-
-  function openCreateModal() {
-    setShowCreateModal(true);
-    setError("");
-  }
-
-  function closeCreateModal() {
-    setShowCreateModal(false);
-    setFormData({
-      nombre: "",
-      ingredientes: "",
-      calorias_totales: "",
-      proteinas: "",
-      carbos: "",
-      grasas: "",
-      tiempo_preparacion: "",
-      tipo_dieta: "",
-      fuente_url: "",
-      origen: "manual",
-    });
-  }
-
-  function handleChange(event) {
-    const { name, value } = event.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  }
-
-  async function handleCreateRecipe(event) {
-    event.preventDefault();
-    setError("");
-
-    try {
-      await createRecipe({
-        nombre: formData.nombre,
-        ingredientes: formData.ingredientes,
-        calorias_totales: Number(formData.calorias_totales),
-        proteinas: Number(formData.proteinas),
-        carbos: Number(formData.carbos),
-        grasas: Number(formData.grasas),
-        tiempo_preparacion: Number(formData.tiempo_preparacion),
-        tipo_dieta: formData.tipo_dieta || null,
-        fuente_url: formData.fuente_url || null,
-        origen: "manual",
-      });
-
-      await loadRecipes(search);
-      closeCreateModal();
-      setActiveTab("manual");
-    } catch (err) {
-      setError(err.message);
-    }
-  }
+    loadRecipesAndFoods();
+  }, [userId]);
 
   const manualRecipes = useMemo(
     () => recipes.filter((recipe) => (recipe.origen || "").toLowerCase() === "manual"),
@@ -119,25 +74,210 @@ export default function RecipesPage() {
     [recipes]
   );
 
-  const visibleRecipes = activeTab === "manual" ? manualRecipes : scrapingRecipes;
+  const filteredManualRecipes = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return manualRecipes;
+    return manualRecipes.filter((recipe) =>
+      recipe.nombre.toLowerCase().includes(query)
+    );
+  }, [manualRecipes, search]);
+
+  const filteredScrapingRecipes = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return scrapingRecipes;
+    return scrapingRecipes.filter((recipe) =>
+      recipe.nombre.toLowerCase().includes(query)
+    );
+  }, [scrapingRecipes, search]);
+
+  const computedTotals = useMemo(() => {
+    return recipeItems.reduce(
+      (acc, item) => {
+        const food = foods.find((entry) => entry.id === Number(item.food_id));
+        const gramos = Number(item.gramos || 0);
+
+        if (!food || gramos <= 0) {
+          return acc;
+        }
+
+        const factor = gramos / 100;
+
+        acc.calorias += food.calorias * factor;
+        acc.proteinas += food.proteinas * factor;
+        acc.carbos += food.carbos * factor;
+        acc.grasas += food.grasas * factor;
+
+        return acc;
+      },
+      { calorias: 0, proteinas: 0, carbos: 0, grasas: 0 }
+    );
+  }, [recipeItems, foods]);
+
+  function openModal() {
+    setShowModal(true);
+    setError("");
+    setFormData({
+      nombre: "",
+      ingredientes: "",
+      tiempo_preparacion: "",
+      tipo_dieta: "",
+    });
+    setRecipeItems([emptyRecipeItem()]);
+  }
+
+  function closeModal() {
+    setShowModal(false);
+    setSavingRecipe(false);
+  }
+
+  function handleFormChange(event) {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  }
+
+  function handleRecipeItemChange(index, field, value) {
+    setRecipeItems((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [field]: value } : item
+      )
+    );
+  }
+
+  function addRecipeItemRow() {
+    setRecipeItems((prev) => [...prev, emptyRecipeItem()]);
+  }
+
+  function removeRecipeItemRow(index) {
+    setRecipeItems((prev) => {
+      if (prev.length === 1) {
+        return [emptyRecipeItem()];
+      }
+      return prev.filter((_, itemIndex) => itemIndex !== index);
+    });
+  }
+
+  async function handleCreateRecipe(event) {
+    event.preventDefault();
+    setError("");
+
+    const validItems = recipeItems
+      .map((item) => ({
+        food_id: Number(item.food_id),
+        gramos: Number(item.gramos),
+      }))
+      .filter((item) => item.food_id > 0 && item.gramos > 0);
+
+    if (!formData.nombre.trim()) {
+      setError("Escribe un nombre para la receta.");
+      return;
+    }
+
+    if (validItems.length === 0) {
+      setError("Añade al menos un alimento con gramos válidos.");
+      return;
+    }
+
+    try {
+      setSavingRecipe(true);
+
+      await createRecipeWithItems({
+        nombre: formData.nombre.trim(),
+        ingredientes: formData.ingredientes.trim() || "Receta creada desde alimentos",
+        tiempo_preparacion: Number(formData.tiempo_preparacion || 0),
+        tipo_dieta: formData.tipo_dieta.trim() || null,
+        user_id: userId,
+        items: validItems,
+      });
+
+      await loadRecipesAndFoods();
+      closeModal();
+      setActiveTab("manual");
+    } catch (err) {
+      setError(err.message || "Error al crear receta");
+    } finally {
+      setSavingRecipe(false);
+    }
+  }
+
+  function toggleRecipe(recipeId) {
+    setExpandedRecipeId((prev) => (prev === recipeId ? null : recipeId));
+  }
+
+  function renderRecipeCards(list, emptyText) {
+    if (list.length === 0) {
+      return (
+        <div className="card">
+          <p>{emptyText}</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid-cards">
+        {list.map((recipe) => {
+          const isOpen = expandedRecipeId === recipe.id;
+
+          return (
+            <div key={recipe.id} className="card recipe-title-card">
+              <button
+                type="button"
+                className="recipe-title-trigger"
+                onClick={() => toggleRecipe(recipe.id)}
+              >
+                <span className="recipe-title-text">{recipe.nombre}</span>
+                <span className="food-card-arrow">{isOpen ? "Ocultar" : "Ver"}</span>
+              </button>
+
+              {isOpen && (
+                <div className="food-card-details">
+                  <p><strong>Calorías:</strong> {recipe.calorias_totales}</p>
+                  <p><strong>Proteínas:</strong> {recipe.proteinas} g</p>
+                  <p><strong>Carbos:</strong> {recipe.carbos} g</p>
+                  <p><strong>Grasas:</strong> {recipe.grasas} g</p>
+                  <p><strong>Tiempo:</strong> {recipe.tiempo_preparacion} min</p>
+                  {recipe.tipo_dieta ? (
+                    <p><strong>Tipo:</strong> {recipe.tipo_dieta}</p>
+                  ) : null}
+                  {recipe.ingredientes ? (
+                    <p><strong>Descripción:</strong> {recipe.ingredientes}</p>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
-    <div className="page recipes-page">
+    <div className="page">
       <div className="page-header page-header-row">
         <div>
           <h2>Recetas</h2>
-          <p>Consulta recetas scrapeadas o crea tus propias recetas.</p>
+          <p>Crea tus recetas con alimentos reales y macros calculados automáticamente.</p>
         </div>
 
-        <button
-          className="add-button"
-          onClick={openCreateModal}
-          aria-label="Añadir receta"
-          type="button"
-        >
+        <button className="add-button" type="button" onClick={openModal}>
           +
         </button>
       </div>
+
+      <form
+        className="search-form"
+        onSubmit={(event) => event.preventDefault()}
+      >
+        <input
+          type="text"
+          placeholder="Buscar receta"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <button type="button">Buscar</button>
+      </form>
 
       <div className="recipes-tabs">
         <button
@@ -157,230 +297,50 @@ export default function RecipesPage() {
         </button>
       </div>
 
-      <form onSubmit={handleSearchSubmit} className="search-form">
-        <input
-          type="text"
-          placeholder={
-            activeTab === "manual"
-              ? "Buscar en mis recetas"
-              : "Buscar en recetas scraping"
-          }
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <button type="submit">Buscar</button>
-      </form>
+      {loading || foodsLoading ? <p>Cargando recetas...</p> : null}
+      {error ? <p className="error-text">{error}</p> : null}
 
-      {loading && <p>Cargando...</p>}
-      {error && <p className="error-text">{error}</p>}
-
-      {!loading && !error && (
-        <div className="grid-cards">
-          {visibleRecipes.length === 0 ? (
-            <div className="card">
-              <p>
-                {activeTab === "manual"
-                  ? "No tienes recetas creadas todavía."
-                  : "No hay recetas scrapeadas para mostrar."}
-              </p>
-            </div>
-          ) : (
-            visibleRecipes.map((recipe) => (
-              <div key={recipe.id} className="card recipe-title-card">
-                <button
-                  type="button"
-                  className="recipe-title-trigger"
-                  onClick={() => openRecipeModal(recipe)}
-                  aria-label={`Ver detalle de la receta ${recipe.nombre}`}
-                >
-                  <span className="recipe-title-text">{recipe.nombre}</span>
-                </button>
-              </div>
-            ))
+      {!loading && !foodsLoading && !error && activeTab === "manual" && (
+        <section className="recipe-section">
+          {renderRecipeCards(
+            filteredManualRecipes,
+            "No tienes recetas manuales todavía."
           )}
-        </div>
+        </section>
       )}
 
-      {selectedRecipe && (
-        <div className="modal-overlay">
-          <button
-            type="button"
-            className="modal-backdrop"
-            onClick={closeRecipeModal}
-            aria-label="Cerrar ventana de receta"
-          />
-
-          <div className="modal-card">
-            <div className="modal-header">
-              <h3>{selectedRecipe.nombre}</h3>
-              <button
-                className="close-button"
-                onClick={closeRecipeModal}
-                type="button"
-                aria-label="Cerrar ventana"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="recipe-modal-body">
-              <div className="recipe-modal-grid">
-                <div className="recipe-modal-stat">
-                  <span>Calorías</span>
-                  <strong>{selectedRecipe.calorias_totales || 0} kcal</strong>
-                </div>
-
-                <div className="recipe-modal-stat">
-                  <span>Proteínas</span>
-                  <strong>{selectedRecipe.proteinas || 0} g</strong>
-                </div>
-
-                <div className="recipe-modal-stat">
-                  <span>Carbohidratos</span>
-                  <strong>{selectedRecipe.carbos || 0} g</strong>
-                </div>
-
-                <div className="recipe-modal-stat">
-                  <span>Grasas</span>
-                  <strong>{selectedRecipe.grasas || 0} g</strong>
-                </div>
-
-                <div className="recipe-modal-stat">
-                  <span>Tiempo</span>
-                  <strong>{selectedRecipe.tiempo_preparacion || 0} min</strong>
-                </div>
-
-                <div className="recipe-modal-stat">
-                  <span>Tipo</span>
-                  <strong>{selectedRecipe.tipo_dieta || "No especificado"}</strong>
-                </div>
-
-                <div className="recipe-modal-stat">
-                  <span>Origen</span>
-                  <strong>{selectedRecipe.origen || "manual"}</strong>
-                </div>
-              </div>
-
-              <div className="recipe-description-box">
-                <h4>Ingredientes / descripción</h4>
-                <p>{selectedRecipe.ingredientes || "No disponible"}</p>
-              </div>
-
-              {selectedRecipe.fuente_url ? (
-                <a
-                  className="recipe-link-button"
-                  href={selectedRecipe.fuente_url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Ver receta original
-                </a>
-              ) : null}
-            </div>
-          </div>
-        </div>
+      {!loading && !foodsLoading && !error && activeTab === "scraping" && (
+        <section className="recipe-section">
+          {renderRecipeCards(
+            filteredScrapingRecipes,
+            "No hay recetas scrapeadas disponibles."
+          )}
+        </section>
       )}
 
-      {showCreateModal && (
-        <div className="modal-overlay">
-          <button
-            type="button"
-            className="modal-backdrop"
-            onClick={closeCreateModal}
-            aria-label="Cerrar ventana de crear receta"
-          />
-
-          <div className="modal-card">
+      {showModal && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div
+            className="modal-card profile-modal-card"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>Crear receta</h3>
-              <button
-                className="close-button"
-                onClick={closeCreateModal}
-                type="button"
-                aria-label="Cerrar ventana"
-              >
+              <button className="close-button" type="button" onClick={closeModal}>
                 ×
               </button>
             </div>
 
-            <form onSubmit={handleCreateRecipe} className="modal-form">
+            <form onSubmit={handleCreateRecipe} className="modal-form recipe-builder-form">
               <div className="field-group">
-                <label htmlFor="recipe_nombre">Nombre</label>
+                <label htmlFor="recipe_nombre">Título</label>
                 <input
                   id="recipe_nombre"
                   type="text"
                   name="nombre"
-                  placeholder="Ej. Bowl de pollo"
                   value={formData.nombre}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="recipe_tipo_dieta">Tipo de dieta</label>
-                <input
-                  id="recipe_tipo_dieta"
-                  type="text"
-                  name="tipo_dieta"
-                  placeholder="Ej. alta_proteina"
-                  value={formData.tipo_dieta}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="recipe_calorias">Calorías totales</label>
-                <input
-                  id="recipe_calorias"
-                  type="number"
-                  step="0.1"
-                  name="calorias_totales"
-                  placeholder="Ej. 540"
-                  value={formData.calorias_totales}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="recipe_proteinas">Proteínas</label>
-                <input
-                  id="recipe_proteinas"
-                  type="number"
-                  step="0.1"
-                  name="proteinas"
-                  placeholder="Ej. 42"
-                  value={formData.proteinas}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="recipe_carbos">Carbohidratos</label>
-                <input
-                  id="recipe_carbos"
-                  type="number"
-                  step="0.1"
-                  name="carbos"
-                  placeholder="Ej. 55"
-                  value={formData.carbos}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="recipe_grasas">Grasas</label>
-                <input
-                  id="recipe_grasas"
-                  type="number"
-                  step="0.1"
-                  name="grasas"
-                  placeholder="Ej. 14"
-                  value={formData.grasas}
-                  onChange={handleChange}
+                  onChange={handleFormChange}
+                  placeholder="Ej. Porridge proteico"
                   required
                 />
               </div>
@@ -391,40 +351,112 @@ export default function RecipesPage() {
                   id="recipe_tiempo"
                   type="number"
                   name="tiempo_preparacion"
-                  placeholder="Ej. 20"
                   value={formData.tiempo_preparacion}
-                  onChange={handleChange}
-                  required
+                  onChange={handleFormChange}
+                  placeholder="Ej. 10"
+                  min="0"
                 />
               </div>
 
               <div className="field-group field-group-full">
-                <label htmlFor="recipe_ingredientes">Ingredientes</label>
-                <textarea
-                  id="recipe_ingredientes"
-                  name="ingredientes"
-                  placeholder="Ej. pollo, arroz, tomate, aceite..."
-                  value={formData.ingredientes}
-                  onChange={handleChange}
-                  rows={5}
-                  required
-                />
-              </div>
-
-              <div className="field-group field-group-full">
-                <label htmlFor="recipe_fuente_url">Enlace original (opcional)</label>
+                <label htmlFor="recipe_tipo_dieta">Tipo de dieta</label>
                 <input
-                  id="recipe_fuente_url"
-                  type="url"
-                  name="fuente_url"
-                  placeholder="https://..."
-                  value={formData.fuente_url}
-                  onChange={handleChange}
+                  id="recipe_tipo_dieta"
+                  type="text"
+                  name="tipo_dieta"
+                  value={formData.tipo_dieta}
+                  onChange={handleFormChange}
+                  placeholder="Ej. alta en proteína"
                 />
               </div>
 
-              <button type="submit" className="submit-button">
-                Guardar receta
+              <div className="field-group field-group-full">
+                <label htmlFor="recipe_descripcion">Descripción</label>
+                <textarea
+                  id="recipe_descripcion"
+                  name="ingredientes"
+                  value={formData.ingredientes}
+                  onChange={handleFormChange}
+                  rows="3"
+                  placeholder="Describe la receta o añade notas opcionales"
+                />
+              </div>
+
+              <div className="field-group field-group-full">
+                <label>Alimentos de la receta</label>
+
+                <div className="recipe-builder-list">
+                  {recipeItems.map((item, index) => (
+                    <div key={index} className="recipe-builder-row">
+                      <select
+                        value={item.food_id}
+                        onChange={(event) =>
+                          handleRecipeItemChange(index, "food_id", event.target.value)
+                        }
+                      >
+                        <option value="">Selecciona un alimento</option>
+                        {foods.map((food) => (
+                          <option key={food.id} value={food.id}>
+                            {food.nombre}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="number"
+                        min="1"
+                        step="0.1"
+                        placeholder="Gramos"
+                        value={item.gramos}
+                        onChange={(event) =>
+                          handleRecipeItemChange(index, "gramos", event.target.value)
+                        }
+                      />
+
+                      <button
+                        type="button"
+                        className="recipe-remove-button"
+                        onClick={() => removeRecipeItemRow(index)}
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  className="secondary-action-button"
+                  onClick={addRecipeItemRow}
+                >
+                  Añadir alimento
+                </button>
+              </div>
+
+              <div className="field-group field-group-full">
+                <label>Macros calculados automáticamente</label>
+                <div className="recipe-totals-box">
+                  <div>
+                    <span>Calorías</span>
+                    <strong>{computedTotals.calorias.toFixed(1)}</strong>
+                  </div>
+                  <div>
+                    <span>Proteínas</span>
+                    <strong>{computedTotals.proteinas.toFixed(1)} g</strong>
+                  </div>
+                  <div>
+                    <span>Carbos</span>
+                    <strong>{computedTotals.carbos.toFixed(1)} g</strong>
+                  </div>
+                  <div>
+                    <span>Grasas</span>
+                    <strong>{computedTotals.grasas.toFixed(1)} g</strong>
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" className="submit-button" disabled={savingRecipe}>
+                {savingRecipe ? "Guardando receta..." : "Guardar receta"}
               </button>
             </form>
           </div>
