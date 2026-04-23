@@ -23,6 +23,9 @@ services:
     depends_on:
       - db
       - redis
+    environment:
+      EDAMAM_APP_ID: cea4c385
+      EDAMAM_APP_KEY: de2b210d707f9956a9126c66d18d05c3
 
   frontend:
     build: ./frontend

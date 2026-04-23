@@ -234,3 +234,23 @@ export async function createRecipe(recipeData) {
 
   return handleResponse(response, "Error al crear receta");
 }
+
+export async function fetchExternalFoods(query) {
+  const response = await fetch(
+    `${API_BASE_URL}/external-foods/?q=${encodeURIComponent(query)}`
+  );
+
+  return handleResponse(response, "Error al buscar alimentos en API externa");
+}
+
+export async function importFoodFromApi(foodData) {
+  const response = await fetch(`${API_BASE_URL}/foods/import`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(foodData),
+  });
+
+  return handleResponse(response, "Error al guardar alimento desde API");
+}

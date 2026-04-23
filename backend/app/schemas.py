@@ -198,3 +198,11 @@ class WeeklyPlanFullResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        
+class FoodImportFromApi(BaseModel):
+    nombre: str
+    calorias: float
+    proteinas: float
+    carbos: float
+    grasas: float
+    fuente: str = "api"
