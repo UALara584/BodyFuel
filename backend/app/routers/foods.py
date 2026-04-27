@@ -19,7 +19,8 @@ def get_db():
 
 @router.post("/", response_model=FoodResponse)
 def create_food(food: FoodCreate, db: Session = Depends(get_db)):
-    new_food = Food(**food.dict())
+    food_data = food.dict()
+    new_food = Food(**food_data)
     db.add(new_food)
     db.commit()
     db.refresh(new_food)

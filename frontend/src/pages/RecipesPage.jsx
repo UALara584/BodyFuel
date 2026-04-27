@@ -29,6 +29,8 @@ export default function RecipesPage() {
 
   const [showModal, setShowModal] = useState(false);
   const [savingRecipe, setSavingRecipe] = useState(false);
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
+  const [showRecipeDetail, setShowRecipeDetail] = useState(false);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -46,7 +48,7 @@ export default function RecipesPage() {
 
     try {
       const [recipesData, foodsData] = await Promise.all([
-        fetchRecipes(),
+        fetchRecipes("", "", userId),
         fetchFoods("", userId),
       ]);
 
@@ -206,7 +208,17 @@ export default function RecipesPage() {
     setExpandedRecipeId((prev) => (prev === recipeId ? null : recipeId));
   }
 
-  function renderRecipeCards(list, emptyText) {
+  function openRecipeDetail(recipe) {
+    setSelectedRecipe(recipe);
+    setShowRecipeDetail(true);
+  }
+
+  function closeRecipeDetail() {
+    setShowRecipeDetail(false);
+    setSelectedRecipe(null);
+  }
+
+  function renderRecipeCards(list, emptyText, isScraping = false) {
     if (list.length === 0) {
       return (
         <div className="card">
@@ -225,13 +237,19 @@ export default function RecipesPage() {
               <button
                 type="button"
                 className="recipe-title-trigger"
-                onClick={() => toggleRecipe(recipe.id)}
+                onClick={() => {
+                  if (isScraping) {
+                    openRecipeDetail(recipe);
+                  } else {
+                    toggleRecipe(recipe.id);
+                  }
+                }}
               >
                 <span className="recipe-title-text">{recipe.nombre}</span>
                 <span className="food-card-arrow">{isOpen ? "Ocultar" : "Ver"}</span>
               </button>
 
-              {isOpen && (
+              {isOpen && !isScraping && (
                 <div className="food-card-details">
                   <p><strong>Calorías:</strong> {recipe.calorias_totales}</p>
                   <p><strong>Proteínas:</strong> {recipe.proteinas} g</p>
@@ -304,7 +322,8 @@ export default function RecipesPage() {
         <section className="recipe-section">
           {renderRecipeCards(
             filteredManualRecipes,
-            "No tienes recetas manuales todavía."
+            "No tienes recetas manuales todavía.",
+            false
           )}
         </section>
       )}
@@ -313,7 +332,8 @@ export default function RecipesPage() {
         <section className="recipe-section">
           {renderRecipeCards(
             filteredScrapingRecipes,
-            "No hay recetas scrapeadas disponibles."
+            "No hay recetas scrapeadas disponibles.",
+            true
           )}
         </section>
       )}
@@ -459,6 +479,89 @@ export default function RecipesPage() {
                 {savingRecipe ? "Guardando receta..." : "Guardar receta"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showRecipeDetail && selectedRecipe && (
+        <div className="modal-overlay" onClick={closeRecipeDetail}>
+          <div
+            className="modal-card recipe-detail-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>{selectedRecipe.nombre}</h3>
+              <button
+                className="close-button"
+                type="button"
+                onClick={closeRecipeDetail}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="recipe-detail-content">
+              <div className="recipe-detail-macros">
+                <div className="macro-item">
+                  <strong>Calorías:</strong>
+                  <span>{Number(selectedRecipe.calorias_totales).toFixed(1)} kcal</span>
+                </div>
+                <div className="macro-item">
+                  <strong>Proteínas:</strong>
+                  <span>{Number(selectedRecipe.proteinas).toFixed(1)} g</span>
+                </div>
+                <div className="macro-item">
+                  <strong>Carbos:</strong>
+                  <span>{Number(selectedRecipe.carbos).toFixed(1)} g</span>
+                </div>
+                <div className="macro-item">
+                  <strong>Grasas:</strong>
+                  <span>{Number(selectedRecipe.grasas).toFixed(1)} g</span>
+                </div>
+              </div>
+
+              {selectedRecipe.tiempo_preparacion ? (
+                <p>
+                  <strong>Tiempo de preparación:</strong> {selectedRecipe.tiempo_preparacion} minutos
+                </p>
+              ) : null}
+
+              {selectedRecipe.tipo_dieta ? (
+                <p>
+                  <strong>Tipo de dieta:</strong> {selectedRecipe.tipo_dieta}
+                </p>
+              ) : null}
+
+              {selectedRecipe.ingredientes ? (
+                <div className="recipe-ingredients">
+                  <strong>Descripción/Ingredientes:</strong>
+                  <p>{selectedRecipe.ingredientes}</p>
+                </div>
+              ) : null}
+
+              {selectedRecipe.fuente_url ? (
+                <div className="recipe-source-link">
+                  <a
+                    href={selectedRecipe.fuente_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="source-link-button"
+                  >
+                    🔗 Ver receta completa en la fuente original
+                  </a>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="secondary-action-button"
+                onClick={closeRecipeDetail}
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -57,7 +57,10 @@ const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
     setError("");
 
     try {
-      const [foodsData, recipesData] = await Promise.all([fetchFoods(), fetchRecipes()]);
+      const [foodsData, recipesData] = await Promise.all([
+        fetchFoods("", userId),
+        fetchRecipes("", "", userId)
+      ]);
       setFoods(foodsData);
       setRecipes(recipesData);
 

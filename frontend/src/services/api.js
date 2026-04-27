@@ -23,11 +23,12 @@ export async function fetchFoods(nombre = "", userId = null) {
   return handleResponse(response, "Error al cargar alimentos");
 }
 
-export async function fetchRecipes(nombre = "", tipoDieta = "") {
+export async function fetchRecipes(nombre = "", tipoDieta = "", userId = null) {
   const params = new URLSearchParams();
 
   if (nombre) params.append("nombre", nombre);
   if (tipoDieta) params.append("tipo_dieta", tipoDieta);
+  if (userId !== null && userId !== undefined) params.append("user_id", userId);
 
   const query = params.toString();
   const url = query

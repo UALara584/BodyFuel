@@ -59,11 +59,13 @@ class Recipe(Base):
     tipo_dieta = Column(String, nullable=True, index=True)
     fuente_url = Column(String, nullable=True)
     origen = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey(USER_FK), nullable=True)
     meal_items = relationship("MealItem", back_populates="recipe")
     proteinas = Column(Float, nullable=False, default=0)
     carbos = Column(Float, nullable=False, default=0)
     grasas = Column(Float, nullable=False, default=0)
     items = relationship("RecipeItem", back_populates="recipe", cascade="all, delete-orphan")
+    user = relationship("User")
 
 class RecipeItem(Base):
     __tablename__ = "recipe_items"

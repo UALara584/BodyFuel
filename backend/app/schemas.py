@@ -62,6 +62,7 @@ class FoodCreate(BaseModel):
     carbos: float
     grasas: float
     fuente: str
+    user_id: int | None = None
 
 
 class FoodResponse(FoodCreate):
@@ -81,6 +82,7 @@ class RecipeCreate(BaseModel):
     tipo_dieta: str | None = None
     fuente_url: str | None = None
     origen: str
+    user_id: int | None = None
 
 
 class RecipeResponse(RecipeCreate):
@@ -165,6 +167,7 @@ class RecipeMini(BaseModel):
     tipo_dieta: str | None = None
     fuente_url: str | None = None
     origen: str
+    user_id: int | None = None
 
     class Config:
         from_attributes = True

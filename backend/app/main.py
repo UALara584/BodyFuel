@@ -203,6 +203,14 @@ def ensure_recipe_macro_columns() -> None:
         connection.execute(text("ALTER TABLE recipes ALTER COLUMN proteinas SET NOT NULL"))
         connection.execute(text("ALTER TABLE recipes ALTER COLUMN carbos SET NOT NULL"))
         connection.execute(text("ALTER TABLE recipes ALTER COLUMN grasas SET NOT NULL"))
+        connection.execute(text("ALTER TABLE recipes ADD COLUMN IF NOT EXISTS user_id INTEGER"))
+        # Solo intenta agregar constraint si no existe
+        try:
+            connection.execute(text("ALTER TABLE recipes ADD CONSTRAINT recipes_user_id_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"))
+        except:
+            pass  # La constraint ya existe, ignorar error
+
+
         
         
 def initialize_database(retries: int = 20, delay: int = 3) -> None:

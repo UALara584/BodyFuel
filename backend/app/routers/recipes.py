@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
@@ -90,9 +91,15 @@ def create_recipe_with_items(
 def get_recipes(
     nombre: str | None = Query(default=None),
     tipo_dieta: str | None = Query(default=None),
+    user_id: int | None = Query(default=None),
     db: Session = Depends(get_db)
 ):
     query = db.query(Recipe)
+
+    if user_id is not None:
+        query = query.filter(or_(Recipe.user_id.is_(None), Recipe.user_id == user_id))
+    else:
+        query = query.filter(Recipe.user_id.is_(None))
 
     if nombre:
         query = query.filter(Recipe.nombre.ilike(f"%{nombre}%"))
