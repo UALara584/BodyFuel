@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { fetchUserById, updateUser } from "../services/api";
+import {
+  fetchFriends,
+  fetchUserById,
+  respondFriendInvitation,
+  searchUsersForFriends,
+  sendFriendInvitation,
+  updateUser,
+} from "../services/api";
 
 const emptyProfile = {
   email: "",
@@ -23,9 +30,41 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [userId, setUserId] = useState(null);
+  const [friendsData, setFriendsData] = useState({
+    friends: [],
+    incoming: [],
+    outgoing: [],
+  });
+  const [friendSearchTerm, setFriendSearchTerm] = useState("");
+  const [friendSearchResults, setFriendSearchResults] = useState([]);
+  const [friendsLoading, setFriendsLoading] = useState(true);
+  const [friendsError, setFriendsError] = useState("");
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
+  const [showProfileSection, setShowProfileSection] = useState(true);
+  const [showFriendsSection, setShowFriendsSection] = useState(false);
+
+  async function loadFriends(currentUserId) {
+    try {
+      setFriendsLoading(true);
+      setFriendsError("");
+      const data = await fetchFriends(currentUserId);
+      setFriendsData(data);
+    } catch (err) {
+      const message = err.message || "";
+      if (message.includes('{"detail":"Not Found"}')) {
+        setFriendsError(
+          "El backend activo no tiene el módulo de amigos. Reinicia el backend para habilitarlo."
+        );
+      } else {
+        setFriendsError(message);
+      }
+    } finally {
+      setFriendsLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function loadProfile() {
+    async function loadProfileAndFriends() {
       try {
         const storedUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
 
@@ -53,7 +92,7 @@ export default function ProfilePage() {
       }
     }
 
-    loadProfile();
+    loadProfileAndFriends();
   }, []);
 
   function handleProfileChange(event) {
@@ -70,6 +109,58 @@ export default function ProfilePage() {
       ...prev,
       [name]: value,
     }));
+  }
+
+  function handleFriendSearchInput(event) {
+    setFriendSearchTerm(event.target.value);
+  }
+
+  async function handleFriendSearch(event) {
+    event.preventDefault();
+    setFriendsError("");
+
+    const term = friendSearchTerm.trim();
+    if (term.length < 2) {
+      setFriendsError("Escribe al menos 2 caracteres para buscar.");
+      return;
+    }
+
+    try {
+      setFriendActionLoading(true);
+      const results = await searchUsersForFriends(userId, term);
+      setFriendSearchResults(results);
+    } catch (err) {
+      setFriendsError(err.message);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  }
+
+  async function handleSendInvitation(targetUserId) {
+    try {
+      setFriendActionLoading(true);
+      setFriendsError("");
+      await sendFriendInvitation(userId, targetUserId);
+      setFriendSearchResults((prev) => prev.filter((candidate) => candidate.id !== targetUserId));
+      await loadFriends(userId);
+    } catch (err) {
+      setFriendsError(err.message);
+    } finally {
+      setFriendActionLoading(false);
+    }
+  }
+
+  async function handleAcceptInvitation(invitationId) {
+    try {
+      setFriendActionLoading(true);
+      setFriendsError("");
+      await respondFriendInvitation(invitationId, userId, true);
+      await loadFriends(userId);
+    } catch (err) {
+      setFriendsError(err.message);
+    } finally {
+      setFriendActionLoading(false);
+    }
   }
 
   function openEditModal() {
@@ -156,26 +247,173 @@ export default function ProfilePage() {
       {success ? <p className="success-text">{success}</p> : null}
 
       <section className="card profile-summary profile-summary-panel">
-        <div className="profile-summary-head">
-          <div>
-            <h3>Datos actuales</h3>
-            <p>Si algún campo está vacío, puedes completarlo en el editor.</p>
-          </div>
+        <button
+          type="button"
+          className="profile-friends-toggle"
+          onClick={() => setShowProfileSection((prev) => !prev)}
+          aria-expanded={showProfileSection}
+        >
+          <span>Datos actuales</span>
+          <span>{showProfileSection ? "Ocultar" : "Mostrar"}</span>
+        </button>
 
-          <button type="button" className="profile-edit-button" onClick={openEditModal}>
-            Editar perfil
-          </button>
-        </div>
+        {showProfileSection ? (
+          <>
+            <div className="profile-summary-head">
+              <div>
+                <p>Si algún campo está vacío, puedes completarlo en el editor.</p>
+              </div>
 
-        <div className="profile-summary-list">
-          <div><span>Correo</span><strong>{profile.email || "Sin datos"}</strong></div>
-          <div><span>Nombre</span><strong>{profile.nombre || "Sin datos"}</strong></div>
-          <div><span>Edad</span><strong>{profile.edad || "Sin datos"}</strong></div>
-          <div><span>Peso</span><strong>{profile.peso ? `${profile.peso} kg` : "Sin datos"}</strong></div>
-          <div><span>Altura</span><strong>{profile.altura ? `${profile.altura} cm` : "Sin datos"}</strong></div>
-          <div><span>Objetivo</span><strong>{profile.objetivo || "Sin datos"}</strong></div>
-          <div><span>Calorías objetivo</span><strong>{profile.calorias_objetivo || "Sin datos"}</strong></div>
-        </div>
+              <button type="button" className="profile-edit-button" onClick={openEditModal}>
+                Editar perfil
+              </button>
+            </div>
+
+            <div className="profile-summary-list">
+              <div><span>Correo</span><strong>{profile.email || "Sin datos"}</strong></div>
+              <div><span>Nombre</span><strong>{profile.nombre || "Sin datos"}</strong></div>
+              <div><span>Edad</span><strong>{profile.edad || "Sin datos"}</strong></div>
+              <div><span>Peso</span><strong>{profile.peso ? `${profile.peso} kg` : "Sin datos"}</strong></div>
+              <div><span>Altura</span><strong>{profile.altura ? `${profile.altura} cm` : "Sin datos"}</strong></div>
+              <div><span>Objetivo</span><strong>{profile.objetivo || "Sin datos"}</strong></div>
+              <div><span>Calorías objetivo</span><strong>{profile.calorias_objetivo || "Sin datos"}</strong></div>
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      <section className="card profile-friends-panel">
+        <button
+          type="button"
+          className="profile-friends-toggle"
+          onClick={() => setShowFriendsSection((prev) => !prev)}
+          aria-expanded={showFriendsSection}
+        >
+          <span>Amigos</span>
+          <span>{showFriendsSection ? "Ocultar" : "Mostrar"}</span>
+        </button>
+
+        {showFriendsSection ? (
+          <>
+            <div className="profile-summary-head">
+              <div>
+                <h3>Buscar personas</h3>
+                <p>Busca usuarios por nombre o correo para invitarlos a tu red.</p>
+              </div>
+            </div>
+
+            {friendsError ? <p className="error-text">{friendsError}</p> : null}
+
+            <form className="search-form profile-friends-search" onSubmit={handleFriendSearch}>
+              <input
+                type="text"
+                value={friendSearchTerm}
+                onChange={handleFriendSearchInput}
+                placeholder="Buscar por nombre o correo"
+              />
+              <button type="submit" disabled={friendActionLoading || !userId}>
+                Buscar
+              </button>
+            </form>
+
+            {friendSearchResults.length > 0 ? (
+              <div className="profile-friends-search-results">
+                {friendSearchResults.map((candidate) => (
+                  <div key={candidate.id} className="profile-friend-row">
+                    <div>
+                      <strong>{candidate.nombre}</strong>
+                      <p>{candidate.email}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="profile-edit-button"
+                      onClick={() => handleSendInvitation(candidate.id)}
+                      disabled={friendActionLoading}
+                    >
+                      Invitar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <section className="card profile-friends-panel">
+              <div className="profile-summary-head">
+                <div>
+                  <h3>Mis amigos</h3>
+                  <p>Personas que ya aceptaron tu invitación o tú aceptaste la suya.</p>
+                </div>
+                <button
+                  type="button"
+                  className="profile-edit-button"
+                  disabled={!userId || friendActionLoading}
+                  onClick={() => loadFriends(userId)}
+                >
+                  Actualizar
+                </button>
+              </div>
+
+              {friendsLoading ? (
+                <p>Cargando amigos...</p>
+              ) : friendsData.friends.length === 0 ? (
+                <p className="item-note">Todavía no tienes amigos agregados.</p>
+              ) : (
+                <div className="profile-friends-search-results">
+                  {friendsData.friends.map((friend) => (
+                    <div key={friend.id} className="profile-friend-row">
+                      <div>
+                        <strong>{friend.nombre}</strong>
+                        <p>{friend.email}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="card profile-friends-panel">
+              <div className="profile-summary-head">
+                <div>
+                  <h3>Invitaciones recibidas</h3>
+                  <p>Acepta solicitudes para añadir nuevos amigos.</p>
+                </div>
+                <button
+                  type="button"
+                  className="profile-edit-button"
+                  disabled={!userId || friendActionLoading}
+                  onClick={() => loadFriends(userId)}
+                >
+                  Actualizar
+                </button>
+              </div>
+
+              {friendsLoading ? (
+                <p>Cargando invitaciones...</p>
+              ) : friendsData.incoming.length === 0 ? (
+                <p className="item-note">No tienes invitaciones pendientes.</p>
+              ) : (
+                <div className="profile-friends-search-results">
+                  {friendsData.incoming.map((invitation) => (
+                    <div key={invitation.invitation_id} className="profile-friend-row">
+                      <div>
+                        <strong>{invitation.user.nombre}</strong>
+                        <p>{invitation.user.email}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="profile-edit-button"
+                        disabled={friendActionLoading}
+                        onClick={() => handleAcceptInvitation(invitation.invitation_id)}
+                      >
+                        Aceptar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        ) : null}
       </section>
 
       {showEditModal && (

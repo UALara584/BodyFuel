@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   createRecipeWithItems,
+  deleteRecipe,
   fetchFoods,
   fetchRecipes,
 } from "../services/api";
@@ -21,7 +22,6 @@ export default function RecipesPage() {
   const [foods, setFoods] = useState([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("manual");
-  const [expandedRecipeId, setExpandedRecipeId] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [foodsLoading, setFoodsLoading] = useState(true);
@@ -31,6 +31,9 @@ export default function RecipesPage() {
   const [savingRecipe, setSavingRecipe] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [showRecipeDetail, setShowRecipeDetail] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [recipeToDelete, setRecipeToDelete] = useState(null);
+  const [deletingRecipe, setDeletingRecipe] = useState(false);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -204,8 +207,9 @@ export default function RecipesPage() {
     }
   }
 
-  function toggleRecipe(recipeId) {
-    setExpandedRecipeId((prev) => (prev === recipeId ? null : recipeId));
+  function closeRecipeDetail() {
+    setShowRecipeDetail(false);
+    setSelectedRecipe(null);
   }
 
   function openRecipeDetail(recipe) {
@@ -213,9 +217,29 @@ export default function RecipesPage() {
     setShowRecipeDetail(true);
   }
 
-  function closeRecipeDetail() {
-    setShowRecipeDetail(false);
-    setSelectedRecipe(null);
+  function openDeleteConfirm(recipe) {
+    setRecipeToDelete(recipe);
+    setShowDeleteConfirm(true);
+  }
+
+  function closeDeleteConfirm() {
+    setShowDeleteConfirm(false);
+    setRecipeToDelete(null);
+  }
+
+  async function handleDeleteRecipe() {
+    if (!recipeToDelete) return;
+
+    try {
+      setDeletingRecipe(true);
+      await deleteRecipe(recipeToDelete.id);
+      await loadRecipesAndFoods();
+      closeDeleteConfirm();
+    } catch (err) {
+      setError(err.message || "Error al eliminar receta");
+    } finally {
+      setDeletingRecipe(false);
+    }
   }
 
   function renderRecipeCards(list, emptyText, isScraping = false) {
@@ -230,40 +254,16 @@ export default function RecipesPage() {
     return (
       <div className="grid-cards">
         {list.map((recipe) => {
-          const isOpen = expandedRecipeId === recipe.id;
-
           return (
             <div key={recipe.id} className="card recipe-title-card">
               <button
                 type="button"
                 className="recipe-title-trigger"
-                onClick={() => {
-                  if (isScraping) {
-                    openRecipeDetail(recipe);
-                  } else {
-                    toggleRecipe(recipe.id);
-                  }
-                }}
+                onClick={() => openRecipeDetail(recipe)}
               >
                 <span className="recipe-title-text">{recipe.nombre}</span>
-                <span className="food-card-arrow">{isOpen ? "Ocultar" : "Ver"}</span>
+                <span className="food-card-arrow">Ver</span>
               </button>
-
-              {isOpen && !isScraping && (
-                <div className="food-card-details">
-                  <p><strong>Calorías:</strong> {recipe.calorias_totales}</p>
-                  <p><strong>Proteínas:</strong> {recipe.proteinas} g</p>
-                  <p><strong>Carbos:</strong> {recipe.carbos} g</p>
-                  <p><strong>Grasas:</strong> {recipe.grasas} g</p>
-                  <p><strong>Tiempo:</strong> {recipe.tiempo_preparacion} min</p>
-                  {recipe.tipo_dieta ? (
-                    <p><strong>Tipo:</strong> {recipe.tipo_dieta}</p>
-                  ) : null}
-                  {recipe.ingredientes ? (
-                    <p><strong>Descripción:</strong> {recipe.ingredientes}</p>
-                  ) : null}
-                </div>
-              )}
             </div>
           );
         })}
@@ -560,6 +560,62 @@ export default function RecipesPage() {
                 onClick={closeRecipeDetail}
               >
                 Cerrar
+              </button>
+              {selectedRecipe && selectedRecipe.origen === "manual" && (
+                <button
+                  type="button"
+                  className="delete-button"
+                  onClick={() => {
+                    closeRecipeDetail();
+                    openDeleteConfirm(selectedRecipe);
+                  }}
+                >
+                  Eliminar receta
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && recipeToDelete && (
+        <div className="modal-overlay" onClick={closeDeleteConfirm}>
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Eliminar receta</h3>
+              <button
+                className="close-button"
+                type="button"
+                onClick={closeDeleteConfirm}
+                disabled={deletingRecipe}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="modal-content">
+              <p>¿Estás seguro de que quieres eliminar la receta "<strong>{recipeToDelete.nombre}</strong>"? Esta acción no se puede deshacer.</p>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="secondary-action-button"
+                onClick={closeDeleteConfirm}
+                disabled={deletingRecipe}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="delete-button"
+                onClick={handleDeleteRecipe}
+                disabled={deletingRecipe}
+              >
+                {deletingRecipe ? "Eliminando..." : "Eliminar"}
               </button>
             </div>
           </div>

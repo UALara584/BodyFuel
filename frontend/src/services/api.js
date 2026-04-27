@@ -39,6 +39,24 @@ export async function fetchRecipes(nombre = "", tipoDieta = "", userId = null) {
   return handleResponse(response, "Error al obtener recetas");
 }
 
+export async function deleteRecipe(recipeId) {
+  const response = await fetch(`${API_BASE_URL}/recipes/${recipeId}`, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Error al eliminar receta: ${errorText}`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  return null;
+}
+
 export async function fetchFullPlan(userId, weekStart) {
   const response = await fetch(`${API_BASE_URL}/plans/${userId}/${weekStart}/full`);
   return handleResponse(response, "Error al obtener el plan semanal");
@@ -271,4 +289,72 @@ export async function createRecipeWithItems(recipeData) {
   });
 
   return handleResponse(response, "Error al crear receta con alimentos");
+}
+
+export async function fetchFriends(userId) {
+  const response = await fetch(`${API_BASE_URL}/friends/${userId}`);
+  return handleResponse(response, "Error al obtener amigos");
+}
+
+export async function searchUsersForFriends(userId, query) {
+  const response = await fetch(
+    `${API_BASE_URL}/friends/${userId}/search?q=${encodeURIComponent(query)}`
+  );
+
+  if (response.status === 404) {
+    const allUsers = await fetchUsers();
+    const normalizedQuery = query.trim().toLowerCase();
+    return allUsers
+      .filter((user) => user.id !== userId)
+      .filter((user) => {
+        const name = (user.nombre || "").toLowerCase();
+        const email = (user.email || "").toLowerCase();
+        return name.includes(normalizedQuery) || email.includes(normalizedQuery);
+      })
+      .slice(0, 15);
+  }
+
+  return handleResponse(response, "Error al buscar usuarios");
+}
+
+export async function sendFriendInvitation(requesterId, addresseeId) {
+  const response = await fetch(`${API_BASE_URL}/friends/invitations`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      requester_id: requesterId,
+      addressee_id: addresseeId,
+    }),
+  });
+
+  if (response.status === 404) {
+    throw new Error(
+      "Invitaciones de amigos no disponibles ahora mismo. Reinicia el backend para habilitarlas."
+    );
+  }
+
+  return handleResponse(response, "Error al enviar invitación");
+}
+
+export async function respondFriendInvitation(invitationId, userId, accept) {
+  const response = await fetch(`${API_BASE_URL}/friends/invitations/${invitationId}/respond`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      accept,
+    }),
+  });
+
+  if (response.status === 404) {
+    throw new Error(
+      "Responder invitaciones no está disponible ahora mismo. Reinicia el backend para habilitarlo."
+    );
+  }
+
+  return handleResponse(response, "Error al responder invitación");
 }

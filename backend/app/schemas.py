@@ -224,3 +224,33 @@ class RecipeCreateWithItems(BaseModel):
     tipo_dieta: str | None = None
     user_id: int | None = None
     items: list[RecipeItemCreate]
+
+
+class FriendUser(BaseModel):
+    id: int
+    nombre: str
+    email: str
+
+    class Config:
+        from_attributes = True
+
+
+class FriendshipCreate(BaseModel):
+    requester_id: int
+    addressee_id: int
+
+
+class FriendshipRespond(BaseModel):
+    user_id: int
+    accept: bool
+
+
+class FriendInvitationItem(BaseModel):
+    invitation_id: int
+    user: FriendUser
+
+
+class FriendshipListResponse(BaseModel):
+    friends: list[FriendUser]
+    incoming: list[FriendInvitationItem]
+    outgoing: list[FriendInvitationItem]

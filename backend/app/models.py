@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, func, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -22,6 +22,18 @@ class User(Base):
     tracking_entries = relationship("Tracking", back_populates="user", cascade=CASCADE_DELETE)
     plans = relationship("WeeklyPlan", cascade=CASCADE_DELETE)
     assistant_messages = relationship("AssistantMessage", back_populates="user", cascade=CASCADE_DELETE)
+    sent_friendships = relationship(
+        "Friendship",
+        foreign_keys="Friendship.requester_id",
+        back_populates="requester",
+        cascade=CASCADE_DELETE,
+    )
+    received_friendships = relationship(
+        "Friendship",
+        foreign_keys="Friendship.addressee_id",
+        back_populates="addressee",
+        cascade=CASCADE_DELETE,
+    )
 
 class Tracking(Base):
     __tablename__ = "tracking"
@@ -127,3 +139,22 @@ class AssistantMessage(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
     user = relationship("User", back_populates="assistant_messages")
+
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+    __table_args__ = (
+        UniqueConstraint("requester_id", "addressee_id", name="uq_friendship_pair"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    requester_id = Column(Integer, ForeignKey(USER_FK), nullable=False, index=True)
+    addressee_id = Column(Integer, ForeignKey(USER_FK), nullable=False, index=True)
+    status = Column(String, nullable=False, default="pending", index=True)  # pending | accepted
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    requester = relationship("User", foreign_keys=[requester_id], back_populates="sent_friendships")
+    addressee = relationship("User", foreign_keys=[addressee_id], back_populates="received_friendships")
