@@ -22,6 +22,125 @@ from .routers.friends import router as friends_router
 app = FastAPI()
 
 
+def estimate_recipe_macros(nombre: str, ingredientes: str, calorias_totales: float) -> tuple[float, float, float]:
+    text_blob = f"{nombre} {ingredientes}".lower()
+    calories = max(float(calorias_totales or 0), 120.0)
+
+    protein_ratio = 0.24
+    carb_ratio = 0.46
+    fat_ratio = 0.30
+
+    high_protein_terms = [
+        "pollo", "pavo", "atun", "atún", "ternera", "res", "huevo", "claras",
+        "salmon", "salmón", "bacalao", "merluza", "gambas", "marisco", "tofu", "tempeh",
+        "legumbre", "lenteja", "garbanzo", "judia", "judía", "proteico", "proteina", "proteína"
+    ]
+    high_carb_terms = [
+        "arroz", "pasta", "quinoa", "patata", "batata", "avena", "pan", "trigo",
+        "cuscus", "cous cous", "fideos", "maiz", "maíz", "fruta"
+    ]
+    high_fat_terms = [
+        "aguacate", "aceite", "fruto seco", "nuez", "almendra", "cacahuete",
+        "queso", "mantequilla", "salmon", "salmón", "yema", "coco", "semillas"
+    ]
+
+    if any(term in text_blob for term in high_protein_terms):
+        protein_ratio += 0.08
+        carb_ratio -= 0.04
+        fat_ratio -= 0.04
+    if any(term in text_blob for term in high_carb_terms):
+        carb_ratio += 0.10
+        protein_ratio -= 0.05
+        fat_ratio -= 0.05
+    if any(term in text_blob for term in high_fat_terms):
+        fat_ratio += 0.10
+        protein_ratio -= 0.05
+        carb_ratio -= 0.05
+
+    protein_ratio = min(max(protein_ratio, 0.12), 0.45)
+    carb_ratio = min(max(carb_ratio, 0.20), 0.65)
+    fat_ratio = min(max(fat_ratio, 0.15), 0.55)
+
+    total_ratio = protein_ratio + carb_ratio + fat_ratio
+    protein_ratio /= total_ratio
+    carb_ratio /= total_ratio
+    fat_ratio /= total_ratio
+
+    proteinas = round((calories * protein_ratio) / 4.0, 1)
+    carbos = round((calories * carb_ratio) / 4.0, 1)
+    grasas = round((calories * fat_ratio) / 9.0, 1)
+    return proteinas, carbos, grasas
+
+
+def estimate_recipe_calories(nombre: str, ingredientes: str, tiempo_preparacion: int) -> float:
+    text_blob = f"{nombre} {ingredientes}".lower()
+    calories = 380.0
+
+    light_terms = ["ensalada", "salteado", "sopa", "crema", "verdura", "vegetal", "light", "bajo en calorias"]
+    medium_terms = ["arroz", "pollo", "carne", "pescado", "legumbre", "garbanzo", "lenteja"]
+    high_cal_terms = [
+        "pasta", "pizza", "hamburguesa", "lasana", "lasaña", "empanada", "tarta",
+        "postre", "brownie", "bizcocho", "galleta", "queso", "mantequilla", "frito"
+    ]
+
+    if any(term in text_blob for term in light_terms):
+        calories -= 130.0
+    if any(term in text_blob for term in medium_terms):
+        calories += 40.0
+    if any(term in text_blob for term in high_cal_terms):
+        calories += 180.0
+
+    prep_minutes = int(tiempo_preparacion or 0)
+    if prep_minutes >= 50:
+        calories += 40.0
+    elif 0 < prep_minutes <= 15:
+        calories -= 20.0
+
+    return round(max(calories, 140.0), 1)
+
+
+def ensure_scraping_recipe_macros() -> None:
+    with Session(engine) as session:
+        recipes = (
+            session.query(models.Recipe)
+            .filter(models.Recipe.origen == "scraping")
+            .all()
+        )
+
+        changed = 0
+        for recipe in recipes:
+            has_empty_calories = float(recipe.calorias_totales or 0) <= 0
+            if has_empty_calories:
+                recipe.calorias_totales = estimate_recipe_calories(
+                    recipe.nombre or "",
+                    recipe.ingredientes or "",
+                    int(recipe.tiempo_preparacion or 0),
+                )
+                changed += 1
+
+            has_empty_macros = (
+                float(recipe.proteinas or 0) <= 0
+                and float(recipe.carbos or 0) <= 0
+                and float(recipe.grasas or 0) <= 0
+            )
+            if not has_empty_macros:
+                continue
+
+            proteinas, carbos, grasas = estimate_recipe_macros(
+                recipe.nombre or "",
+                recipe.ingredientes or "",
+                float(recipe.calorias_totales or 0),
+            )
+            recipe.proteinas = proteinas
+            recipe.carbos = carbos
+            recipe.grasas = grasas
+            changed += 1
+
+        if changed:
+            session.commit()
+            print(f"Macros estimados para recetas scraping: {changed}")
+
+
 def ensure_user_auth_columns() -> None:
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR"))
@@ -249,6 +368,7 @@ ensure_user_auth_columns()
 ensure_recipe_macro_columns()
 ensure_food_user_column()
 ensure_default_foods()
+ensure_scraping_recipe_macros()
 
 app.include_router(users_router)
 app.include_router(tracking_router)

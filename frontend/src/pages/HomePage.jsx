@@ -2,7 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchFullPlan, fetchTrackingByUser } from "../services/api";
 
 function toISODate(value) {
-  return value.toISOString().slice(0, 10);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(isoDate, amount) {
+  const date = new Date(`${isoDate}T00:00:00`);
+  date.setDate(date.getDate() + amount);
+  return toISODate(date);
+}
+
+function isFutureDate(isoDate, todayIso) {
+  return isoDate > todayIso;
 }
 
 function getCurrentWeekMonday() {
@@ -22,6 +35,8 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+const DAY_NAMES = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
+
 export default function HomePage() {
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userName = currentUser?.nombre || "Usuario";
@@ -29,11 +44,32 @@ export default function HomePage() {
   const userId = currentUser?.id;
   const targetCalories = Number(currentUser?.calorias_objetivo || 0);
   const weekStart = getCurrentWeekMonday();
+  const complianceStorageKey = userId ? `bf_compliance_${userId}` : "";
 
   const [trackingEntries, setTrackingEntries] = useState([]);
   const [weeklyPlan, setWeeklyPlan] = useState(null);
+  const [complianceByDate, setComplianceByDate] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!complianceStorageKey) {
+      setComplianceByDate({});
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(complianceStorageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      setComplianceByDate(parsed && typeof parsed === "object" ? parsed : {});
+    } catch {
+      setComplianceByDate({});
+    }
+  }, [complianceStorageKey]);
+
+  useEffect(() => {
+    if (!complianceStorageKey) return;
+    localStorage.setItem(complianceStorageKey, JSON.stringify(complianceByDate));
+  }, [complianceStorageKey, complianceByDate]);
 
   useEffect(() => {
     if (!userId) {
@@ -66,9 +102,6 @@ export default function HomePage() {
     const sortedTracking = [...trackingEntries].sort((a, b) => a.fecha.localeCompare(b.fecha));
     const todayIso = toISODate(new Date());
     const todayEntry = sortedTracking.find((entry) => entry.fecha === todayIso);
-    const consumedToday = Number(todayEntry?.calorias_consumidas || 0);
-    const consumedPercent = targetCalories ? clampPercent((consumedToday / targetCalories) * 100) : 0;
-    const remainingToday = Math.max(targetCalories - consumedToday, 0);
 
     const last7Weights = sortedTracking.filter((entry) => Boolean(entry.peso)).slice(-7);
     const last30Weights = sortedTracking.filter((entry) => Boolean(entry.peso)).slice(-30);
@@ -80,52 +113,53 @@ export default function HomePage() {
     });
 
     const defaultMacro = { proteinas: 0, carbos: 0, grasas: 0 };
+    const weekDayByDate = Object.fromEntries(weekDays.map((date, index) => [date, DAY_NAMES[index]]));
     const macrosByDate = Object.fromEntries(weekDays.map((date) => [date, { ...defaultMacro }]));
+    const caloriesByDate = Object.fromEntries(weekDays.map((date) => [date, 0]));
 
     for (const meal of weeklyPlan?.meals || []) {
-      const dayIndex = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"].indexOf(
-        (meal.dia || "").toLowerCase()
-      );
+      const dayIndex = DAY_NAMES.indexOf((meal.dia || "").toLowerCase());
       if (dayIndex < 0) continue;
       const dayDate = weekDays[dayIndex];
 
       for (const item of meal.items || []) {
         const qty = Number(item.cantidad || 1);
         if (item.food) {
+          caloriesByDate[dayDate] += Number(item.food.calorias || 0) * qty;
           macrosByDate[dayDate].proteinas += Number(item.food.proteinas || 0) * qty;
           macrosByDate[dayDate].carbos += Number(item.food.carbos || 0) * qty;
           macrosByDate[dayDate].grasas += Number(item.food.grasas || 0) * qty;
-       } else if (item.recipe) {
-  macrosByDate[dayDate].proteinas += Number(item.recipe.proteinas || 0) * qty;
-  macrosByDate[dayDate].carbos += Number(item.recipe.carbos || 0) * qty;
-  macrosByDate[dayDate].grasas += Number(item.recipe.grasas || 0) * qty;
-}
+        } else if (item.recipe) {
+          caloriesByDate[dayDate] += Number(item.recipe.calorias_totales || 0) * qty;
+          macrosByDate[dayDate].proteinas += Number(item.recipe.proteinas || 0) * qty;
+          macrosByDate[dayDate].carbos += Number(item.recipe.carbos || 0) * qty;
+          macrosByDate[dayDate].grasas += Number(item.recipe.grasas || 0) * qty;
+        }
       }
     }
+
+    const hasTodayMeals = (weeklyPlan?.meals || []).some(
+      (meal) => (meal.dia || "").toLowerCase() === weekDayByDate[todayIso]
+    );
+    const consumedTodayFromPlan = Number(caloriesByDate[todayIso] || 0);
+    const consumedToday = hasTodayMeals ? consumedTodayFromPlan : Number(todayEntry?.calorias_consumidas || 0);
+    const consumedTodayRounded = Math.round(consumedToday);
+    const consumedPercent = targetCalories ? clampPercent((consumedTodayRounded / targetCalories) * 100) : 0;
+    const remainingToday = Math.max(Math.round(targetCalories - consumedToday), 0);
+
+    const completedWeekDays = weekDays.filter((date) => Boolean(complianceByDate[date]));
+    const completedDaysCount = completedWeekDays.length;
+    const adherence = clampPercent((completedDaysCount / 7) * 100);
 
     let streak = 0;
-    for (let i = sortedTracking.length - 1; i >= 0; i -= 1) {
-      const consumed = Number(sortedTracking[i].calorias_consumidas || 0);
-      const min = targetCalories * 0.9;
-      const max = targetCalories * 1.1;
-      if (targetCalories > 0 && consumed >= min && consumed <= max) {
-        streak += 1;
-      } else {
-        break;
-      }
+    let cursor = todayIso;
+    while (complianceByDate[cursor]) {
+      streak += 1;
+      cursor = addDays(cursor, -1);
     }
 
-    const weekTracking = sortedTracking.filter((entry) => weekDays.includes(entry.fecha));
-    const compliantDays = weekTracking.filter((entry) => {
-      const consumed = Number(entry.calorias_consumidas || 0);
-      const min = targetCalories * 0.9;
-      const max = targetCalories * 1.1;
-      return targetCalories > 0 && consumed >= min && consumed <= max;
-    }).length;
-    const adherence = clampPercent((compliantDays / 7) * 100);
-
     return {
-      consumedToday,
+      consumedToday: consumedTodayRounded,
       consumedPercent,
       remainingToday,
       weeklyWeight: last7Weights,
@@ -134,14 +168,32 @@ export default function HomePage() {
       streak,
       adherence,
       weekDays,
+      completedDaysCount,
     };
-  }, [trackingEntries, weeklyPlan, targetCalories, weekStart]);
+  }, [trackingEntries, weeklyPlan, targetCalories, weekStart, complianceByDate]);
+
+  function toggleCompliance(date, checked) {
+    setComplianceByDate((prev) => ({
+      ...prev,
+      [date]: checked,
+    }));
+  }
+
+  function getFlameLevel(streak) {
+    if (streak >= 14) return "flame-4";
+    if (streak >= 7) return "flame-3";
+    if (streak >= 3) return "flame-2";
+    if (streak >= 1) return "flame-1";
+    return "flame-0";
+  }
+
+  const todayIso = toISODate(new Date());
 
   return (
     <div className="page home-page">
       <section className="home-top">
         <div>
-          <p className="home-greeting">Buenos días</p>
+          <p className="home-greeting">Buenos dias</p>
           <h2 className="home-user-name">{userName}</h2>
         </div>
         <div className="home-user-badge" aria-hidden="true">
@@ -149,22 +201,24 @@ export default function HomePage() {
         </div>
       </section>
 
-      {loading ? <p>Cargando estadísticas...</p> : null}
+      {loading ? <p>Cargando estadisticas...</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
 
       {!loading && !error ? (
         <section className="stats-grid">
           <article className="card stat-card">
-            <h3>Calorías de hoy</h3>
+            <h3>Calorias de hoy</h3>
             <p className="stat-main">{stats.consumedToday} kcal</p>
-            <p className="stat-sub">Objetivo: {targetCalories || "-"} kcal · Restantes: {stats.remainingToday} kcal</p>
+            <p className="stat-sub">
+              Objetivo: {targetCalories || "-"} kcal · Restantes: {stats.remainingToday} kcal
+            </p>
             <div className="home-progress-track">
               <div className="home-progress-fill" style={{ width: `${stats.consumedPercent}%` }} />
             </div>
           </article>
 
           <article className="card stat-card">
-            <h3>Evolución de peso (7 días)</h3>
+            <h3>Evolucion de peso (7 dias)</h3>
             <div className="simple-chart">
               {stats.weeklyWeight.length === 0 ? (
                 <p className="item-note">Sin registros de peso.</p>
@@ -180,7 +234,7 @@ export default function HomePage() {
           </article>
 
           <article className="card stat-card">
-            <h3>Evolución de peso (30 días)</h3>
+            <h3>Evolucion de peso (30 dias)</h3>
             <div className="simple-chart simple-chart-compact">
               {stats.monthlyWeight.length === 0 ? (
                 <p className="item-note">Sin registros mensuales.</p>
@@ -195,7 +249,7 @@ export default function HomePage() {
           </article>
 
           <article className="card stat-card stat-wide">
-            <h3>Macros por día (semana actual)</h3>
+            <h3>Macros por dia (semana actual)</h3>
             <div className="macro-grid">
               {stats.weekDays.map((date) => {
                 const day = stats.macrosByDate[date];
@@ -211,7 +265,9 @@ export default function HomePage() {
                       <div className="macro-carb" style={{ width: `${c}%` }} />
                       <div className="macro-fat" style={{ width: `${g}%` }} />
                     </div>
-                    <small>P {Math.round(day.proteinas)}g · C {Math.round(day.carbos)}g · G {Math.round(day.grasas)}g</small>
+                    <small>
+                      P {Math.round(day.proteinas)}g · C {Math.round(day.carbos)}g · G {Math.round(day.grasas)}g
+                    </small>
                   </div>
                 );
               })}
@@ -219,17 +275,39 @@ export default function HomePage() {
           </article>
 
           <article className="card stat-card">
-            <h3>Racha cumpliendo el plan</h3>
-            <p className="stat-main">{stats.streak} días</p>
-            <p className="stat-sub">Días consecutivos dentro del objetivo calórico.</p>
+            <h3>Racha cumpliendo la dieta</h3>
+            <div className="streak-row">
+              <p className="stat-main">{stats.streak} dias</p>
+              <span className={`streak-flame ${getFlameLevel(stats.streak)}`} aria-hidden="true">
+                🔥
+              </span>
+            </div>
+            <p className="stat-sub">Dias seguidos marcados como cumplidos.</p>
           </article>
 
           <article className="card stat-card">
             <h3>Adherencia semanal</h3>
             <p className="stat-main">{stats.adherence}%</p>
-            <p className="stat-sub">Porcentaje de días de la semana en rango objetivo.</p>
+            <p className="stat-sub">Dias cumplidos esta semana: {stats.completedDaysCount}/7.</p>
             <div className="home-progress-track">
               <div className="home-progress-fill" style={{ width: `${stats.adherence}%` }} />
+            </div>
+          </article>
+
+          <article className="card stat-card stat-wide">
+            <h3>Checklist de dieta (semana actual)</h3>
+            <div className="compliance-grid">
+              {stats.weekDays.map((date) => (
+                <label key={date} className="compliance-item">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(complianceByDate[date])}
+                    disabled={isFutureDate(date, todayIso)}
+                    onChange={(event) => toggleCompliance(date, event.target.checked)}
+                  />
+                  <span>{formatShortDate(date)}</span>
+                </label>
+              ))}
             </div>
           </article>
         </section>

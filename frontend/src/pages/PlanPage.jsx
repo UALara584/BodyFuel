@@ -17,7 +17,10 @@ function getCurrentWeekMonday() {
   const day = today.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   today.setDate(today.getDate() + diff);
-  return today.toISOString().slice(0, 10);
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const date = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${date}`;
 }
 
 function guessMealType(hourValue) {

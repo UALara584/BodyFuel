@@ -80,6 +80,10 @@ def metric_keywords(message: str) -> set[str]:
     return found
 
 
+def contains_any(message_norm: str, terms: list[str]) -> bool:
+    return any(term in message_norm for term in terms)
+
+
 def extract_grams(message_norm: str) -> float | None:
     patterns = [
         r"(\d+(?:\.\d+)?)\s*g\b",
@@ -98,6 +102,21 @@ def extract_grams(message_norm: str) -> float | None:
                 return None
 
     return None
+
+
+def extract_all_grams(message_norm: str) -> list[float]:
+    matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:g|gr|gramos?)\b", message_norm)
+    grams_values: list[float] = []
+
+    for value in matches:
+        try:
+            grams = float(value)
+        except ValueError:
+            continue
+        if grams > 0:
+            grams_values.append(grams)
+
+    return grams_values
 
 
 def is_grams_query(message_norm: str) -> bool:
@@ -153,6 +172,45 @@ def rank_food_matches(message_norm: str, foods: list[Food], max_results: int) ->
 
 def rank_recipe_matches(message_norm: str, recipes: list[Recipe], max_results: int) -> list[Recipe]:
     return rank_matches_by_name(message_norm, recipes, max_results)
+
+
+def extract_comparison_candidates(message_norm: str) -> tuple[str, str] | None:
+    patterns = [
+        r"(?:compara(?:r)?|comparacion(?: entre)?)\s+(.+?)\s+(?:vs|versus|con|frente a)\s+(.+)",
+        r"(.+?)\s+(?:vs|versus|frente a)\s+(.+)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, message_norm)
+        if not match:
+            continue
+
+        left = match.group(1).strip()
+        right = match.group(2).strip()
+
+        if left and right:
+            return left, right
+
+    return None
+
+
+def resolve_comparison_foods(
+    message_norm: str,
+    foods: list[Food],
+    fallback_matches: list[Food],
+) -> tuple[Food, Food] | None:
+    candidates = extract_comparison_candidates(message_norm)
+    if candidates is not None:
+        left_query, right_query = candidates
+        left_matches = rank_food_matches(left_query, foods, max_results=1)
+        right_matches = rank_food_matches(right_query, foods, max_results=1)
+        if left_matches and right_matches and left_matches[0].id != right_matches[0].id:
+            return left_matches[0], right_matches[0]
+
+    if len(fallback_matches) >= 2:
+        return fallback_matches[0], fallback_matches[1]
+
+    return None
 
 
 def format_food_line(food: Food) -> str:
@@ -331,21 +389,64 @@ def build_local_response(
     matched_foods: list[Food],
     matched_recipes: list[Recipe],
 ) -> AssistantChatResponse:
-    compare_requested = any(word in message_norm for word in ["compar", "vs", "versus", "mejor"])
-    top_protein_requested = "mas prote" in message_norm or "alto en prote" in message_norm
-    low_cal_requested = "menos calor" in message_norm or "bajo en calor"
+    compare_requested = contains_any(message_norm, ["compar", "vs", "versus", "mejor", "frente a"])
+    top_protein_requested = contains_any(
+        message_norm,
+        ["mas prote", "alto en prote", "altos en prote", "mayor prote", "mayores prote"],
+    )
+    low_protein_requested = contains_any(
+        message_norm,
+        ["menos prote", "bajo en prote", "bajos en prote", "menor prote", "menores prote"],
+    )
+    top_fat_requested = contains_any(
+        message_norm,
+        ["mas grasa", "alto en grasa", "altos en grasa", "mayor grasa", "mayores grasa"],
+    )
+    low_fat_requested = contains_any(
+        message_norm,
+        ["menos grasa", "bajo en grasa", "bajos en grasa", "menor grasa", "menores grasa"],
+    )
+    top_cal_requested = contains_any(
+        message_norm,
+        ["mas calor", "alto en calor", "altos en calor", "mayor calor", "mayores calor"],
+    )
+    low_cal_requested = contains_any(
+        message_norm,
+        ["menos calor", "bajo en calor", "bajos en calor", "menor calor", "menores calor"],
+    )
     recipe_hint = any(word in message_norm for word in ["receta", "recetas", "preparar", "cocinar"])
     grams = extract_grams(message_norm)
+
+    if compare_requested:
+        compared_foods = resolve_comparison_foods(message_norm, foods, matched_foods)
+        if compared_foods is not None:
+            grams_values = extract_all_grams(message_norm)
+            if grams_values:
+                left_grams = grams_values[0]
+                right_grams = grams_values[1] if len(grams_values) > 1 else grams_values[0]
+                return build_compare_grams_response(
+                    compared_foods[0],
+                    compared_foods[1],
+                    left_grams=left_grams,
+                    right_grams=right_grams,
+                )
+            return build_compare_response(compared_foods[0], compared_foods[1])
 
     if grams is not None and matched_foods:
         return build_food_grams_response(message_norm, matched_foods[0], grams)
 
     if top_protein_requested:
         return build_rank_response(foods, max_results, rank_type="protein")
+    if low_protein_requested:
+        return build_rank_response(foods, max_results, rank_type="low_protein")
+    if top_fat_requested:
+        return build_rank_response(foods, max_results, rank_type="fat")
+    if low_fat_requested:
+        return build_rank_response(foods, max_results, rank_type="low_fat")
+    if top_cal_requested:
+        return build_rank_response(foods, max_results, rank_type="calories")
     if low_cal_requested:
         return build_rank_response(foods, max_results, rank_type="low_calories")
-    if compare_requested and len(matched_foods) >= 2:
-        return build_compare_response(matched_foods[0], matched_foods[1])
     if matched_recipes and (recipe_hint or not matched_foods):
         return build_recipe_info_response(matched_recipes[:max_results], intent="recipe_info")
     if matched_foods:
@@ -441,6 +542,22 @@ def build_rank_response(foods: list[Food], max_results: int, rank_type: str) -> 
         top_foods = sorted(foods, key=lambda f: f.proteinas, reverse=True)[:max_results]
         reply = "Top alimentos con mas proteinas por cada 100 g:\n"
         intent = "top_protein"
+    elif rank_type == "low_protein":
+        top_foods = sorted(foods, key=lambda f: f.proteinas)[:max_results]
+        reply = "Alimentos con menos proteinas por cada 100 g:\n"
+        intent = "low_protein"
+    elif rank_type == "fat":
+        top_foods = sorted(foods, key=lambda f: f.grasas, reverse=True)[:max_results]
+        reply = "Top alimentos con mas grasas por cada 100 g:\n"
+        intent = "top_fat"
+    elif rank_type == "low_fat":
+        top_foods = sorted(foods, key=lambda f: f.grasas)[:max_results]
+        reply = "Alimentos con menos grasas por cada 100 g:\n"
+        intent = "low_fat"
+    elif rank_type == "calories":
+        top_foods = sorted(foods, key=lambda f: f.calorias, reverse=True)[:max_results]
+        reply = "Top alimentos con mas calorias por cada 100 g:\n"
+        intent = "top_calories"
     else:
         top_foods = sorted(foods, key=lambda f: f.calorias)[:max_results]
         reply = "Alimentos con menos calorias por cada 100 g:\n"
@@ -467,6 +584,35 @@ def build_compare_response(a: Food, b: Food) -> AssistantChatResponse:
     return AssistantChatResponse(
         reply="\n".join(reply_lines),
         intent="compare",
+        source="local",
+        matched_foods=[a.nombre, b.nombre],
+        matched_recipes=[],
+    )
+
+
+def build_compare_grams_response(
+    a: Food,
+    b: Food,
+    *,
+    left_grams: float,
+    right_grams: float,
+) -> AssistantChatResponse:
+    a_scaled = scale_food_by_grams(a, left_grams)
+    b_scaled = scale_food_by_grams(b, right_grams)
+    reply_lines = [
+        f"Comparacion entre {a.nombre} ({left_grams:.0f} g) y {b.nombre} ({right_grams:.0f} g):",
+        f"- Calorias: {a_scaled['calorias']:.1f} vs {b_scaled['calorias']:.1f} kcal",
+        f"- Proteinas: {a_scaled['proteinas']:.1f} vs {b_scaled['proteinas']:.1f} g",
+        f"- Carbos: {a_scaled['carbos']:.1f} vs {b_scaled['carbos']:.1f} g",
+        f"- Grasas: {a_scaled['grasas']:.1f} vs {b_scaled['grasas']:.1f} g",
+        "",
+        "Referencia por 100 g:",
+        f"- {a.nombre}: {a.calorias:.0f} kcal | P {a.proteinas:.1f} g | C {a.carbos:.1f} g | G {a.grasas:.1f} g",
+        f"- {b.nombre}: {b.calorias:.0f} kcal | P {b.proteinas:.1f} g | C {b.carbos:.1f} g | G {b.grasas:.1f} g",
+    ]
+    return AssistantChatResponse(
+        reply="\n".join(reply_lines),
+        intent="compare_grams",
         source="local",
         matched_foods=[a.nombre, b.nombre],
         matched_recipes=[],

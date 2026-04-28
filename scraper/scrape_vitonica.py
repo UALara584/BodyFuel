@@ -28,8 +28,20 @@ def normalize_spaces(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
 
 
+def normalize_no_accents(text: str) -> str:
+    return (
+        (text or "")
+        .lower()
+        .replace("á", "a")
+        .replace("é", "e")
+        .replace("í", "i")
+        .replace("ó", "o")
+        .replace("ú", "u")
+    )
+
+
 def infer_diet_type(text: str) -> str | None:
-    lowered = text.lower()
+    lowered = normalize_no_accents(text)
 
     if "keto" in lowered:
         return "keto"
@@ -46,17 +58,93 @@ def infer_diet_type(text: str) -> str | None:
 
 
 def parse_minutes(text: str) -> int:
-    match = re.search(r"(\d+)\s*min", text.lower())
+    match = re.search(r"(\d+)\s*min", normalize_no_accents(text))
     if not match:
         return 0
     return int(match.group(1))
 
 
 def parse_calories(text: str) -> float:
-    match = re.search(r"(\d+)\s*(kcal|calor[ií]as)", text.lower())
+    normalized = normalize_no_accents(text)
+    match = re.search(r"(\d+)\s*(kcal|calorias)", normalized)
     if not match:
         return 0.0
     return float(match.group(1))
+
+
+def estimate_recipe_calories(title: str, summary: str, minutes: int) -> float:
+    text_blob = normalize_no_accents(f"{title} {summary}")
+    calories = 380.0
+
+    light_terms = ["ensalada", "salteado", "sopa", "crema", "verdura", "vegetal", "light", "bajo en calorias"]
+    medium_terms = ["arroz", "pollo", "carne", "pescado", "legumbre", "garbanzo", "lenteja"]
+    high_cal_terms = [
+        "pasta", "pizza", "hamburguesa", "lasana", "empanada", "tarta",
+        "postre", "brownie", "bizcocho", "galleta", "queso", "mantequilla", "frito"
+    ]
+
+    if any(term in text_blob for term in light_terms):
+        calories -= 130.0
+    if any(term in text_blob for term in medium_terms):
+        calories += 40.0
+    if any(term in text_blob for term in high_cal_terms):
+        calories += 180.0
+
+    if minutes >= 50:
+        calories += 40.0
+    elif 0 < minutes <= 15:
+        calories -= 20.0
+
+    return round(max(calories, 140.0), 1)
+
+
+def estimate_recipe_macros(title: str, summary: str, calories: float) -> tuple[float, float, float]:
+    text_blob = normalize_no_accents(f"{title} {summary}")
+    base_calories = max(float(calories or 0), 120.0)
+
+    protein_ratio = 0.24
+    carb_ratio = 0.46
+    fat_ratio = 0.30
+
+    high_protein_terms = [
+        "pollo", "pavo", "atun", "ternera", "res", "huevo", "claras",
+        "salmon", "bacalao", "merluza", "gambas", "marisco", "tofu", "tempeh",
+        "legumbre", "lenteja", "garbanzo", "judia", "proteico", "proteina"
+    ]
+    high_carb_terms = [
+        "arroz", "pasta", "quinoa", "patata", "batata", "avena", "pan", "trigo",
+        "cuscus", "cous cous", "fideos", "maiz", "fruta"
+    ]
+    high_fat_terms = [
+        "aguacate", "aceite", "fruto seco", "nuez", "almendra", "cacahuete",
+        "queso", "mantequilla", "salmon", "yema", "coco", "semillas"
+    ]
+
+    if any(term in text_blob for term in high_protein_terms):
+        protein_ratio += 0.08
+        carb_ratio -= 0.04
+        fat_ratio -= 0.04
+    if any(term in text_blob for term in high_carb_terms):
+        carb_ratio += 0.10
+        protein_ratio -= 0.05
+        fat_ratio -= 0.05
+    if any(term in text_blob for term in high_fat_terms):
+        fat_ratio += 0.10
+        protein_ratio -= 0.05
+        carb_ratio -= 0.05
+
+    protein_ratio = min(max(protein_ratio, 0.12), 0.45)
+    carb_ratio = min(max(carb_ratio, 0.20), 0.65)
+    fat_ratio = min(max(fat_ratio, 0.15), 0.55)
+    total_ratio = protein_ratio + carb_ratio + fat_ratio
+    protein_ratio /= total_ratio
+    carb_ratio /= total_ratio
+    fat_ratio /= total_ratio
+
+    proteinas = round((base_calories * protein_ratio) / 4.0, 1)
+    carbos = round((base_calories * carb_ratio) / 4.0, 1)
+    grasas = round((base_calories * fat_ratio) / 9.0, 1)
+    return proteinas, carbos, grasas
 
 
 def fetch_html(url: str) -> str:
@@ -163,6 +251,9 @@ def insert_recipes(db_url: str, rows: List[Tuple[str, str, str]]) -> tuple[int, 
                 diet_type = infer_diet_type(details_text)
                 minutes = parse_minutes(details_text)
                 calories = parse_calories(details_text)
+                if calories <= 0:
+                    calories = estimate_recipe_calories(title, summary, minutes)
+                proteins, carbs, fats = estimate_recipe_macros(title, summary, calories)
 
                 cursor.execute(
                     """
@@ -184,9 +275,9 @@ def insert_recipes(db_url: str, rows: List[Tuple[str, str, str]]) -> tuple[int, 
                         title,
                         ingredients,
                         calories,
-                        0.0,
-                        0.0,
-                        0.0,
+                        proteins,
+                        carbs,
+                        fats,
                         minutes,
                         diet_type,
                         recipe_url,
