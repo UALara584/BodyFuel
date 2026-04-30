@@ -2601,6 +2601,12 @@ html body {
   color: var(--text-0);
 }
 
+.app-shell .modal-card,
+.app-shell .profile-modal-card {
+  background: var(--surface-1);
+  border-color: var(--border-0);
+}
+
 .app-shell p,
 .app-shell small,
 .app-shell label,
@@ -2644,4 +2650,38 @@ html body {
 .app-shell .recipe-detail-content,
 .app-shell .modal-content p {
   color: var(--text-1);
+}
+
+.app-shell .macro-item {
+  background: var(--surface-2);
+  border-color: var(--border-0);
+}
+
+.app-shell .macro-item strong,
+.app-shell .macro-item span {
+  color: var(--text-0);
+}
+
+.app-shell .recipe-detail-macros .macro-item strong {
+  color: var(--text-1);
+}
+
+.app-shell .recipe-detail-content strong {
+  color: var(--text-0);
+}
+
+.app-shell .modal-header h3,
+.app-shell .modal-header {
+  color: var(--text-0);
+}
+
+.app-shell .close-button {
+  background: var(--surface-2);
+  border-color: var(--border-0);
+  color: var(--text-1);
+}
+
+.app-shell .close-button:hover {
+  background: var(--surface-1);
+  color: var(--text-0);
 }
