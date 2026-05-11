@@ -8,6 +8,7 @@ import {
   fetchFullPlan,
   fetchRecipes,
 } from "../services/api";
+import { exportPlanToPDF } from "../utils/pdfExport";
 
 const DAYS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
 const HOURS = Array.from({ length: 16 }, (_, index) => `${String(index + 7).padStart(2, "0")}:00`);
@@ -47,9 +48,11 @@ export default function PlanPage() {
   const [activeDropHour, setActiveDropHour] = useState("");
 
   const [showFoods, setShowFoods] = useState(false);
-const [showRecipes, setShowRecipes] = useState(false);
-const [showManualRecipes, setShowManualRecipes] = useState(false);
-const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
+  const [showRecipes, setShowRecipes] = useState(false);
+  const [showManualRecipes, setShowManualRecipes] = useState(false);
+  const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id;
@@ -196,6 +199,21 @@ const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
     }
   }
 
+  async function handleExportPDF() {
+    try {
+      setExportLoading(true);
+      setExportError("");
+      if (!plan) {
+        throw new Error("No hay plan disponible para exportar");
+      }
+      await exportPlanToPDF(plan, currentUser?.nombre || "Usuario", weekStart);
+    } catch (err) {
+      setExportError(err.message);
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
   if (loading) {
     return <p>Cargando plan semanal...</p>;
   }
@@ -203,11 +221,22 @@ const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
   return (
     <div className="page">
       <div className="page-header">
-        <h2>Plan semanal</h2>
-        <p>Arrastra alimentos o recetas al día y hora exacta que quieras.</p>
+        <div>
+          <h2>Plan semanal</h2>
+          <p>Arrastra alimentos o recetas al día y hora exacta que quieras.</p>
+        </div>
+        <button
+          type="button"
+          className="profile-edit-button"
+          onClick={handleExportPDF}
+          disabled={exportLoading || !plan}
+        >
+          {exportLoading ? "Generando..." : "Exportar PDF"}
+        </button>
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
+      {exportError ? <p className="error-text">{exportError}</p> : null}
 
       <section className="plan-board">
         <aside className="card plan-library">

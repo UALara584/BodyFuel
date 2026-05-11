@@ -153,6 +153,18 @@ def ensure_user_auth_columns() -> None:
         connection.execute(text("ALTER TABLE users ALTER COLUMN email SET NOT NULL"))
         connection.execute(text("ALTER TABLE users ALTER COLUMN password SET NOT NULL"))
 
+
+def ensure_user_nutrition_columns() -> None:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS sexo VARCHAR"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS peso_objetivo_kg DOUBLE PRECISION"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS nivel_actividad INTEGER"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS tipo_dieta VARCHAR"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS intolerancias JSONB DEFAULT '[]'::jsonb"))
+        connection.execute(text("UPDATE users SET nivel_actividad = COALESCE(nivel_actividad, 3)"))
+        connection.execute(text("UPDATE users SET intolerancias = COALESCE(intolerancias, '[]'::jsonb)"))
+
 def ensure_food_user_column() -> None:
     with engine.begin() as connection:
         connection.execute(
@@ -338,6 +350,7 @@ def initialize_database(retries: int = 20, delay: int = 3) -> None:
         try:
             Base.metadata.create_all(bind=engine)
             ensure_user_auth_columns()
+            ensure_user_nutrition_columns()
             ensure_recipe_macro_columns()
             ensure_default_foods()
             print("Base de datos inicializada correctamente")
@@ -365,6 +378,7 @@ app.add_middleware(
 )
 Base.metadata.create_all(bind=engine)
 ensure_user_auth_columns()
+ensure_user_nutrition_columns()
 ensure_recipe_macro_columns()
 ensure_food_user_column()
 ensure_default_foods()

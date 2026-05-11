@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { fetchFullPlan, fetchTrackingByUser } from "../services/api";
 
 function toISODate(value) {
@@ -44,7 +44,8 @@ export default function HomePage() {
   const userId = currentUser?.id;
   const targetCalories = Number(currentUser?.calorias_objetivo || 0);
   const weekStart = getCurrentWeekMonday();
-  const complianceStorageKey = userId ? `bf_compliance_${userId}` : "";
+
+  const complianceStorageKey = useMemo(() => (userId ? `bf_compliance_${userId}` : ""), [userId]);
 
   const [trackingEntries, setTrackingEntries] = useState([]);
   const [weeklyPlan, setWeeklyPlan] = useState(null);
@@ -52,6 +53,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Load compliance data from localStorage on mount
   useEffect(() => {
     if (!complianceStorageKey) {
       setComplianceByDate({});
@@ -60,15 +62,23 @@ export default function HomePage() {
     try {
       const raw = localStorage.getItem(complianceStorageKey);
       const parsed = raw ? JSON.parse(raw) : {};
-      setComplianceByDate(parsed && typeof parsed === "object" ? parsed : {});
-    } catch {
+      if (parsed && typeof parsed === "object") {
+        setComplianceByDate(parsed);
+      }
+    } catch (err) {
+      console.error("Error loading compliance data:", err);
       setComplianceByDate({});
     }
   }, [complianceStorageKey]);
 
+  // Save compliance data to localStorage whenever it changes
   useEffect(() => {
     if (!complianceStorageKey) return;
-    localStorage.setItem(complianceStorageKey, JSON.stringify(complianceByDate));
+    try {
+      localStorage.setItem(complianceStorageKey, JSON.stringify(complianceByDate));
+    } catch (err) {
+      console.error("Error saving compliance data:", err);
+    }
   }, [complianceStorageKey, complianceByDate]);
 
   useEffect(() => {
@@ -172,12 +182,12 @@ export default function HomePage() {
     };
   }, [trackingEntries, weeklyPlan, targetCalories, weekStart, complianceByDate]);
 
-  function toggleCompliance(date, checked) {
-    setComplianceByDate((prev) => ({
-      ...prev,
-      [date]: checked,
-    }));
-  }
+  const toggleCompliance = useCallback((date, checked) => {
+    setComplianceByDate((prev) => {
+      const updated = { ...prev, [date]: checked };
+      return updated;
+    });
+  }, []);
 
   function getFlameLevel(streak) {
     if (streak >= 14) return "flame-4";

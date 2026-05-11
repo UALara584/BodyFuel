@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +12,56 @@ from ..schemas import AuthCredentials, UserCreate, UserResponse, UserUpdate
 router = APIRouter(prefix="/users", tags=["Users"])
 USER_NOT_FOUND = "Usuario no encontrado"
 INVALID_CREDENTIALS = "Correo o contraseña incorrectos"
+
+ACTIVITY_FACTORS = {
+    1: 1.2,
+    2: 1.375,
+    3: 1.55,
+    4: 1.725,
+    5: 1.9,
+}
+
+
+def calculate_age(fecha_nacimiento: date | None) -> int | None:
+    if not fecha_nacimiento:
+        return None
+
+    today = date.today()
+    age = today.year - fecha_nacimiento.year
+    if (today.month, today.day) < (fecha_nacimiento.month, fecha_nacimiento.day):
+        age -= 1
+    return age
+
+
+def normalize_objective(objetivo: str | None) -> str:
+    text = (objetivo or "").strip().lower()
+    if text in {"volumen", "ganar", "ganar_musculo"}:
+        return "ganar"
+    if text in {"definicion", "definición", "perder", "perder_peso"}:
+        return "perder"
+    return "mantener"
+
+
+def calculate_target_calories(user_data: dict) -> int | None:
+    peso = user_data.get("peso")
+    altura = user_data.get("altura")
+    sexo = user_data.get("sexo")
+    edad = user_data.get("edad") or calculate_age(user_data.get("fecha_nacimiento"))
+
+    if not peso or not altura or not sexo or not edad:
+        return user_data.get("calorias_objetivo")
+
+    bmr = (10 * float(peso)) + (6.25 * float(altura)) - (5 * int(edad))
+    bmr += 5 if sexo == "hombre" else -161
+    activity_factor = ACTIVITY_FACTORS.get(int(user_data.get("nivel_actividad") or 3), ACTIVITY_FACTORS[3])
+    tdee = bmr * activity_factor
+    objetivo = normalize_objective(user_data.get("objetivo"))
+
+    if objetivo == "perder":
+        return round(tdee - 500)
+    if objetivo == "ganar":
+        return round(tdee + 300)
+    return round(tdee)
 
 
 def get_db():
@@ -29,6 +80,10 @@ def create_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
 
     user_data = user.dict()
     user_data["nombre"] = user_data.get("nombre") or user_data["email"]
+    user_data["objetivo"] = normalize_objective(user_data.get("objetivo"))
+    user_data["edad"] = user_data.get("edad") or calculate_age(user_data.get("fecha_nacimiento"))
+    user_data["calorias_objetivo"] = calculate_target_calories(user_data)
+
     new_user = User(**user_data)
     db.add(new_user)
     try:
@@ -94,9 +149,49 @@ def update_user(user_id: int, data: UserUpdate, db: Annotated[Session, Depends(g
     if "nombre" in update_data:
         user.nombre = update_data["nombre"] or user.email
 
-    for key in ["edad", "peso", "altura", "objetivo", "calorias_objetivo"]:
+    profile_keys = [
+        "edad",
+        "fecha_nacimiento",
+        "sexo",
+        "peso",
+        "altura",
+        "peso_objetivo_kg",
+        "nivel_actividad",
+        "objetivo",
+        "tipo_dieta",
+        "intolerancias",
+        "calorias_objetivo",
+    ]
+
+    if "objetivo" in update_data:
+        update_data["objetivo"] = normalize_objective(update_data.get("objetivo"))
+
+    for key in profile_keys:
         if key in update_data:
             setattr(user, key, update_data[key])
+
+    recalculation_keys = {
+        "fecha_nacimiento",
+        "sexo",
+        "peso",
+        "altura",
+        "nivel_actividad",
+        "objetivo",
+    }
+    if recalculation_keys.intersection(update_data):
+        user.edad = calculate_age(user.fecha_nacimiento) or user.edad
+        user.calorias_objetivo = calculate_target_calories(
+            {
+                "fecha_nacimiento": user.fecha_nacimiento,
+                "sexo": user.sexo,
+                "peso": user.peso,
+                "altura": user.altura,
+                "nivel_actividad": user.nivel_actividad,
+                "objetivo": user.objetivo,
+                "edad": user.edad,
+                "calorias_objetivo": user.calorias_objetivo,
+            }
+        )
 
     db.commit()
     db.refresh(user)

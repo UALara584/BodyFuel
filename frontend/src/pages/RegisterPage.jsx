@@ -7,12 +7,27 @@ const initialForm = {
   password: "",
   confirmPassword: "",
   nombre: "",
-  edad: "",
+  fecha_nacimiento: "",
+  sexo: "mujer",
   peso: "",
   altura: "",
-  objetivo: "",
-  calorias_objetivo: "",
+  peso_objetivo_kg: "",
+  nivel_actividad: "3",
+  objetivo: "perder",
+  tipo_dieta: "mediterranea",
+  intolerancias: [],
+  intoleranciasExtra: "",
 };
+
+const activityOptions = [
+  { value: "1", label: "Sedentario", detail: "poco o nada de ejercicio" },
+  { value: "2", label: "Ligero", detail: "1-3 días por semana" },
+  { value: "3", label: "Moderado", detail: "3-5 días por semana" },
+  { value: "4", label: "Activo", detail: "6-7 días por semana" },
+  { value: "5", label: "Muy activo", detail: "entrenamiento intenso" },
+];
+
+const intoleranceOptions = ["lactosa", "gluten", "frutos secos", "huevo", "marisco", "soja"];
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState(initialForm);
@@ -28,6 +43,25 @@ export default function RegisterPage() {
     }));
   }
 
+  function handleIntoleranceChange(event) {
+    const { value, checked } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      intolerancias: checked
+        ? [...prev.intolerancias, value]
+        : prev.intolerancias.filter((item) => item !== value),
+    }));
+  }
+
+  function getIntolerances() {
+    const extra = formData.intoleranciasExtra
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    return [...new Set([...formData.intolerancias, ...extra])];
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
@@ -36,13 +70,16 @@ export default function RegisterPage() {
       !formData.email.trim() ||
       !formData.password ||
       !formData.nombre.trim() ||
-      !formData.edad ||
+      !formData.fecha_nacimiento ||
+      !formData.sexo ||
       !formData.peso ||
       !formData.altura ||
-      !formData.objetivo.trim() ||
-      !formData.calorias_objetivo
+      !formData.peso_objetivo_kg ||
+      !formData.nivel_actividad ||
+      !formData.objetivo ||
+      !formData.tipo_dieta
     ) {
-      setError("Completa todos los datos para registrarte.");
+      setError("Completa todos los datos para calcular tu perfil.");
       return;
     }
 
@@ -63,11 +100,15 @@ export default function RegisterPage() {
         email: formData.email,
         password: formData.password,
         nombre: formData.nombre,
-        edad: Number(formData.edad),
+        fecha_nacimiento: formData.fecha_nacimiento,
+        sexo: formData.sexo,
         peso: Number(formData.peso),
         altura: Number(formData.altura),
+        peso_objetivo_kg: Number(formData.peso_objetivo_kg),
+        nivel_actividad: Number(formData.nivel_actividad),
         objetivo: formData.objetivo,
-        calorias_objetivo: Number(formData.calorias_objetivo),
+        tipo_dieta: formData.tipo_dieta,
+        intolerancias: getIntolerances(),
       });
 
       navigate("/", { replace: true, state: { registered: true } });
@@ -83,11 +124,11 @@ export default function RegisterPage() {
       <div className="auth-card auth-card-large auth-card-elevated">
         <div className="auth-topbar">
           <p className="auth-kicker">BODYFUEL</p>
-          <span className="auth-chip">Nuevo perfil</span>
+          <span className="auth-chip">Perfil calculado</span>
         </div>
 
         <h1>Registro</h1>
-        <p className="auth-subtitle">Crea tu cuenta con tus datos personales y acceso.</p>
+        <p className="auth-subtitle">Crea tu cuenta y calcularemos calorías, macros y objetivos automáticamente.</p>
 
         {error ? <p className="error-text">{error}</p> : null}
 
@@ -144,30 +185,36 @@ export default function RegisterPage() {
           </div>
 
           <div className="auth-field">
-            <label htmlFor="edad">Edad</label>
+            <label htmlFor="fecha_nacimiento">Fecha de nacimiento</label>
             <input
-              id="edad"
-              name="edad"
-              type="number"
-              min="0"
-              value={formData.edad}
+              id="fecha_nacimiento"
+              name="fecha_nacimiento"
+              type="date"
+              value={formData.fecha_nacimiento}
               onChange={handleChange}
-              placeholder="Ej. 28"
               required
             />
           </div>
 
           <div className="auth-field">
-            <label htmlFor="peso">Peso (kg)</label>
+            <label htmlFor="sexo">Género</label>
+            <select id="sexo" name="sexo" value={formData.sexo} onChange={handleChange} required>
+              <option value="mujer">Mujer</option>
+              <option value="hombre">Hombre</option>
+            </select>
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="peso">Peso actual (kg)</label>
             <input
               id="peso"
               name="peso"
               type="number"
-              min="0"
+              min="1"
               step="0.1"
               value={formData.peso}
               onChange={handleChange}
-              placeholder="Ej. 72.5"
+              placeholder="Ej. 68"
               required
             />
           </div>
@@ -178,44 +225,99 @@ export default function RegisterPage() {
               id="altura"
               name="altura"
               type="number"
-              min="0"
+              min="1"
               step="0.1"
               value={formData.altura}
               onChange={handleChange}
-              placeholder="Ej. 175"
+              placeholder="Ej. 165"
+              required
+            />
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="peso_objetivo_kg">Peso objetivo (kg)</label>
+            <input
+              id="peso_objetivo_kg"
+              name="peso_objetivo_kg"
+              type="number"
+              min="1"
+              step="0.1"
+              value={formData.peso_objetivo_kg}
+              onChange={handleChange}
+              placeholder="Ej. 58"
               required
             />
           </div>
 
           <div className="auth-field">
             <label htmlFor="objetivo">Objetivo</label>
-            <input
-              id="objetivo"
-              name="objetivo"
-              type="text"
-              value={formData.objetivo}
-              onChange={handleChange}
-              placeholder="Ej. Definición"
-              required
-            />
+            <select id="objetivo" name="objetivo" value={formData.objetivo} onChange={handleChange} required>
+              <option value="perder">Definición / perder grasa</option>
+              <option value="mantener">Mantenimiento</option>
+              <option value="ganar">Volumen / ganar músculo</option>
+            </select>
           </div>
 
-          <div className="auth-field auth-field-full">
-            <label htmlFor="calorias_objetivo">Calorías objetivo</label>
-            <input
-              id="calorias_objetivo"
-              name="calorias_objetivo"
-              type="number"
-              min="0"
-              value={formData.calorias_objetivo}
+          <div className="auth-field">
+            <label htmlFor="nivel_actividad">Nivel de actividad</label>
+            <select
+              id="nivel_actividad"
+              name="nivel_actividad"
+              value={formData.nivel_actividad}
               onChange={handleChange}
-              placeholder="Ej. 2200"
               required
+            >
+              {activityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} - {option.detail}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="auth-field">
+            <label htmlFor="tipo_dieta">Tipo de dieta</label>
+            <select id="tipo_dieta" name="tipo_dieta" value={formData.tipo_dieta} onChange={handleChange} required>
+              <option value="mediterranea">Mediterránea</option>
+              <option value="omnivora">Omnívora</option>
+              <option value="vegetariana">Vegetariana</option>
+              <option value="vegana">Vegana</option>
+              <option value="keto">Keto</option>
+              <option value="alta en proteina">Alta en proteína</option>
+            </select>
+          </div>
+
+          <fieldset className="auth-field auth-field-full auth-checkbox-field">
+            <legend>Intolerancias</legend>
+            <div className="auth-checkbox-grid">
+              {intoleranceOptions.map((option) => (
+                <label key={option} className="auth-checkbox-option">
+                  <input
+                    type="checkbox"
+                    value={option}
+                    checked={formData.intolerancias.includes(option)}
+                    onChange={handleIntoleranceChange}
+                  />
+                  <span>{option}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="auth-field auth-field-full">
+            <label htmlFor="intoleranciasExtra">Otras intolerancias</label>
+            <input
+              id="intoleranciasExtra"
+              name="intoleranciasExtra"
+              type="text"
+              value={formData.intoleranciasExtra}
+              onChange={handleChange}
+              placeholder="Separadas por comas"
             />
           </div>
 
           <button type="submit" className="auth-primary-button" disabled={loading}>
-            {loading ? "Registrando..." : "Crear cuenta"}
+            {loading ? "Calculando perfil..." : "Crear cuenta"}
           </button>
         </form>
 

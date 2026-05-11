@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import date
 
 
@@ -6,11 +6,17 @@ class UserCreate(BaseModel):
     email: str
     password: str
     nombre: str
-    edad: int
+    edad: int | None = None
+    fecha_nacimiento: date | None = None
+    sexo: str | None = None
     peso: float
     altura: float
+    peso_objetivo_kg: float | None = None
+    nivel_actividad: int | None = 3
     objetivo: str
-    calorias_objetivo: int
+    tipo_dieta: str | None = None
+    intolerancias: list[str] = Field(default_factory=list)
+    calorias_objetivo: int | None = None
 
 
 class UserUpdate(BaseModel):
@@ -18,9 +24,15 @@ class UserUpdate(BaseModel):
     password: str | None = None
     nombre: str | None = None
     edad: int | None = None
+    fecha_nacimiento: date | None = None
+    sexo: str | None = None
     peso: float | None = None
     altura: float | None = None
+    peso_objetivo_kg: float | None = None
+    nivel_actividad: int | None = None
     objetivo: str | None = None
+    tipo_dieta: str | None = None
+    intolerancias: list[str] | None = None
     calorias_objetivo: int | None = None
 
 

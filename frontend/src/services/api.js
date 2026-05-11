@@ -176,11 +176,15 @@ export async function registerUserWithCredentials({
   email,
   password,
   nombre,
-  edad,
+  fecha_nacimiento,
+  sexo,
   peso,
   altura,
+  peso_objetivo_kg,
+  nivel_actividad,
   objetivo,
-  calorias_objetivo,
+  tipo_dieta,
+  intolerancias,
 }) {
   const normalizedEmail = normalizeEmail(email);
 
@@ -188,11 +192,15 @@ export async function registerUserWithCredentials({
     email: normalizedEmail,
     password,
     nombre,
-    edad,
+    fecha_nacimiento,
+    sexo,
     peso,
     altura,
+    peso_objetivo_kg,
+    nivel_actividad,
     objetivo,
-    calorias_objetivo,
+    tipo_dieta,
+    intolerancias,
   });
 }
 

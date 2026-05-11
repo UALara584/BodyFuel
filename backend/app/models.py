@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, func, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Text, ForeignKey, func, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -14,9 +14,15 @@ class User(Base):
     password = Column(String, nullable=False)
     nombre = Column(String, nullable=False)
     edad = Column(Integer)
+    fecha_nacimiento = Column(Date)
+    sexo = Column(String)
     peso = Column(Float)
     altura = Column(Float)
+    peso_objetivo_kg = Column(Float)
+    nivel_actividad = Column(Integer)
     objetivo = Column(String)
+    tipo_dieta = Column(String)
+    intolerancias = Column(JSON, default=list)
     calorias_objetivo = Column(Integer)
 
     tracking_entries = relationship("Tracking", back_populates="user", cascade=CASCADE_DELETE)

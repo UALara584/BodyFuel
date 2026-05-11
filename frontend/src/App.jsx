@@ -8,7 +8,6 @@ import AssistantPage from "./pages/AssistantPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 
-// eslint-disable-next-line react/prop-types
 function NavLinkItem({ to, children }) {
   const location = useLocation();
   const isActive = location.pathname === to;
@@ -21,9 +20,10 @@ function NavLinkItem({ to, children }) {
 }
 
 function RequireAuth() {
+  const location = useLocation();
   const hasUser = Boolean(localStorage.getItem("bf_current_user"));
 
-  if (!hasUser) {
+  if (!hasUser && location.pathname !== "/profile") {
     return <Navigate to="/" replace />;
   }
 
