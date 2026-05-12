@@ -244,8 +244,9 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function arraysMatch(left = [], right = []) {
-  return left.length === right.length && left.every((item, index) => item === right[index]);
+function persistCurrentUser(user) {
+  localStorage.setItem("bf_current_user", JSON.stringify(user));
+  window.dispatchEvent(new Event("bf:user-updated"));
 }
 
 export default function ProfilePage({ mode = "summary" }) {
@@ -260,6 +261,7 @@ export default function ProfilePage({ mode = "summary" }) {
   const [deletePassword, setDeletePassword] = useState("");
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [intolerancesText, setIntolerancesText] = useState("");
+  const [caloriesEdited, setCaloriesEdited] = useState(false);
   const [activeMetricInfo, setActiveMetricInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -279,21 +281,26 @@ export default function ProfilePage({ mode = "summary" }) {
           setProfile(nextProfile);
           setSavedProfile(nextProfile);
           setIntolerancesText(nextProfile.intolerancias.join(", "));
+          setCaloriesEdited(false);
           return;
         }
 
         setUserId(storedUser.id);
         const freshUser = await fetchUserById(storedUser.id);
-        const nextProfile = createProfileFromUser({ ...storedUser, ...freshUser });
+        const currentUser = { ...storedUser, ...freshUser };
+        persistCurrentUser(currentUser);
+        const nextProfile = createProfileFromUser(currentUser);
         setProfile(nextProfile);
         setSavedProfile(nextProfile);
         setIntolerancesText(nextProfile.intolerancias.join(", "));
+        setCaloriesEdited(false);
       } catch (err) {
         if (storedUser) {
           const fallbackProfile = createProfileFromUser(storedUser);
           setProfile(fallbackProfile);
           setSavedProfile(fallbackProfile);
           setIntolerancesText(fallbackProfile.intolerancias.join(", "));
+          setCaloriesEdited(false);
         }
         setError(err.message);
       } finally {
@@ -306,6 +313,10 @@ export default function ProfilePage({ mode = "summary" }) {
 
   function handleProfileChange(event) {
     const { name, value } = event.target;
+
+    if (name === "calorias_objetivo") {
+      setCaloriesEdited(true);
+    }
 
     setProfile((prev) => ({
       ...prev,
@@ -355,54 +366,65 @@ export default function ProfilePage({ mode = "summary" }) {
       }
     }
 
-    const payload = {};
     const currentIntolerances = parseIntolerances(intolerancesText);
-    const numberFields = ["edad", "peso", "altura", "peso_objetivo_kg", "nivel_actividad", "calorias_objetivo"];
-    const fieldValues = {
-      email: profile.email.trim(),
+    const weight = optionalNumber(profile.peso);
+    const height = optionalNumber(profile.altura);
+    const targetWeight = optionalNumber(profile.peso_objetivo_kg);
+    const activityLevel = optionalNumber(profile.nivel_actividad);
+    const targetCalories = optionalNumber(profile.calorias_objetivo);
+    const shouldRecalculateCalories =
+      optionalNumber(profile.edad) !== optionalNumber(savedProfile.edad) ||
+      (profile.fecha_nacimiento || null) !== (savedProfile.fecha_nacimiento || null) ||
+      profile.sexo !== savedProfile.sexo ||
+      weight !== optionalNumber(savedProfile.peso) ||
+      height !== optionalNumber(savedProfile.altura) ||
+      activityLevel !== optionalNumber(savedProfile.nivel_actividad) ||
+      profile.objetivo !== savedProfile.objetivo;
+
+    if (weight === null || height === null) {
+      setError("El peso y la altura son obligatorios.");
+      return;
+    }
+
+    const payload = {
+      email: profile.email.trim().toLowerCase(),
       nombre: profile.nombre.trim(),
       fecha_nacimiento: profile.fecha_nacimiento || null,
       sexo: profile.sexo,
+      edad: optionalNumber(profile.edad),
+      peso: weight,
+      altura: height,
+      peso_objetivo_kg: targetWeight,
+      nivel_actividad: activityLevel,
       objetivo: profile.objetivo,
       tipo_dieta: profile.tipo_dieta.trim() || null,
       intolerancias: currentIntolerances,
     };
 
-    Object.entries(fieldValues).forEach(([key, value]) => {
-      if (key === "intolerancias") {
-        if (!arraysMatch(value, savedProfile.intolerancias)) payload[key] = value;
-        return;
-      }
-
-      const savedValue = key === "fecha_nacimiento" ? savedProfile[key] || null : savedProfile[key] || null;
-      if (value !== savedValue) payload[key] = value;
-    });
-
-    numberFields.forEach((key) => {
-      const value = optionalNumber(profile[key]);
-      if (value !== optionalNumber(savedProfile[key])) payload[key] = value;
-    });
-
-    if (!("peso" in payload) && "peso_kg" in payload) {
-      payload.peso = payload.peso_kg;
+    if (profile.calorias_objetivo !== "" && (caloriesEdited || !shouldRecalculateCalories)) {
+      payload.calorias_objetivo = targetCalories;
     }
 
     if (passwordData.password) payload.password = passwordData.password;
 
-    if (Object.keys(payload).length === 0) {
-      setSuccess("No hay cambios pendientes para guardar.");
-      return;
-    }
-
     try {
       setSaving(true);
       const updatedUser = await updateUser(userId, payload);
-      localStorage.setItem("bf_current_user", JSON.stringify(updatedUser));
-      window.dispatchEvent(new Event("bf:user-updated"));
-      const nextProfile = createProfileFromUser(updatedUser);
+      let freshUser = updatedUser;
+
+      try {
+        freshUser = await fetchUserById(userId);
+      } catch {
+        freshUser = updatedUser;
+      }
+
+      const currentUser = { ...updatedUser, ...freshUser };
+      persistCurrentUser(currentUser);
+      const nextProfile = createProfileFromUser(currentUser);
       setProfile(nextProfile);
       setSavedProfile(nextProfile);
       setIntolerancesText(nextProfile.intolerancias.join(", "));
+      setCaloriesEdited(false);
       setPasswordData({ password: "", confirmPassword: "" });
       setSuccess("Perfil actualizado correctamente.");
     } catch (err) {

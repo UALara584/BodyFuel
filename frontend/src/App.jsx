@@ -10,6 +10,7 @@ import AssistantPage from "./pages/AssistantPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import { useEffect, useState } from "react";
+import { fetchUserById } from "./services/api";
 
 function NavIcon({ name }) {
   const icons = {
@@ -88,7 +89,6 @@ function NavLinkItem({ to, icon, children }) {
 }
 
 function RequireAuth() {
-  const location = useLocation();
   const hasUser = Boolean(localStorage.getItem("bf_current_user"));
 
   if (!hasUser) {
@@ -127,6 +127,32 @@ function AppLayout() {
       window.removeEventListener("storage", syncCurrentUser);
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshCurrentUser() {
+      const storedUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
+      if (!storedUser?.id) return;
+
+      try {
+        const freshUser = await fetchUserById(storedUser.id);
+        if (cancelled) return;
+
+        const nextUser = { ...storedUser, ...freshUser };
+        localStorage.setItem("bf_current_user", JSON.stringify(nextUser));
+        setCurrentUser(nextUser);
+      } catch {
+        // Mantiene la sesion local si el backend no esta disponible en ese momento.
+      }
+    }
+
+    refreshCurrentUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
 
   function handleLogout() {
     localStorage.removeItem("bf_current_user");

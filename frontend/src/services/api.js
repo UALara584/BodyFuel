@@ -1,4 +1,9 @@
-const API_BASE_URL = "http://localhost:8000";
+function getDefaultApiBaseUrl() {
+  const hostname = window.location.hostname === "0.0.0.0" ? "localhost" : window.location.hostname;
+  return `${window.location.protocol}//${hostname}:8000`;
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || getDefaultApiBaseUrl();
 
 async function handleResponse(response, errorMessage) {
   if (!response.ok) {
