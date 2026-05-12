@@ -231,6 +231,24 @@ export async function updateUser(userId, userData) {
   return handleResponse(response, "Error al actualizar usuario");
 }
 
+export async function deleteUserAccount(userId, password) {
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/users/${userId}/delete-confirm`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+  } catch {
+    throw new Error("No se pudo conectar con el backend. Reinicia el backend e intentalo de nuevo.");
+  }
+
+  return handleResponse(response, "Error al eliminar cuenta");
+}
+
 export async function askNutritionAssistant(message, userId) {
   const response = await fetch(`${API_BASE_URL}/assistant/chat`, {
     method: "POST",

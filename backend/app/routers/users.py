@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
 from ..models import User
-from ..schemas import AuthCredentials, UserCreate, UserResponse, UserUpdate
+from ..schemas import AuthCredentials, UserCreate, UserDeleteConfirm, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 USER_NOT_FOUND = "Usuario no encontrado"
@@ -163,6 +163,8 @@ def update_user(user_id: int, data: UserUpdate, db: Annotated[Session, Depends(g
         "calorias_objetivo",
     ]
 
+    has_manual_calories = "calorias_objetivo" in update_data
+
     if "objetivo" in update_data:
         update_data["objetivo"] = normalize_objective(update_data.get("objetivo"))
 
@@ -180,32 +182,45 @@ def update_user(user_id: int, data: UserUpdate, db: Annotated[Session, Depends(g
     }
     if recalculation_keys.intersection(update_data):
         user.edad = calculate_age(user.fecha_nacimiento) or user.edad
-        user.calorias_objetivo = calculate_target_calories(
-            {
-                "fecha_nacimiento": user.fecha_nacimiento,
-                "sexo": user.sexo,
-                "peso": user.peso,
-                "altura": user.altura,
-                "nivel_actividad": user.nivel_actividad,
-                "objetivo": user.objetivo,
-                "edad": user.edad,
-                "calorias_objetivo": user.calorias_objetivo,
-            }
-        )
+        if not has_manual_calories:
+            user.calorias_objetivo = calculate_target_calories(
+                {
+                    "fecha_nacimiento": user.fecha_nacimiento,
+                    "sexo": user.sexo,
+                    "peso": user.peso,
+                    "altura": user.altura,
+                    "nivel_actividad": user.nivel_actividad,
+                    "objetivo": user.objetivo,
+                    "edad": user.edad,
+                    "calorias_objetivo": user.calorias_objetivo,
+                }
+            )
 
     db.commit()
     db.refresh(user)
     return user
 
 
-@router.delete("/{user_id}", responses={404: {"description": USER_NOT_FOUND}})
-def delete_user(user_id: int, db: Annotated[Session, Depends(get_db)]):
+def delete_user_with_password(user_id: int, data: UserDeleteConfirm, db: Session):
     user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
+    if user.password != data.password:
+        raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
+
     db.delete(user)
     db.commit()
 
     return {"message": "Usuario eliminado"}
+
+
+@router.post("/{user_id}/delete-confirm", responses={404: {"description": USER_NOT_FOUND}})
+def confirm_delete_user(user_id: int, data: UserDeleteConfirm, db: Annotated[Session, Depends(get_db)]):
+    return delete_user_with_password(user_id, data, db)
+
+
+@router.delete("/{user_id}", responses={404: {"description": USER_NOT_FOUND}})
+def delete_user(user_id: int, data: UserDeleteConfirm, db: Annotated[Session, Depends(get_db)]):
+    return delete_user_with_password(user_id, data, db)

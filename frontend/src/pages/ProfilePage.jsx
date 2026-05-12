@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
-import {
-  fetchFriends,
-  fetchUserById,
-  respondFriendInvitation,
-  searchUsersForFriends,
-  sendFriendInvitation,
-  updateUser,
-} from "../services/api";
+import { useNavigate } from "react-router-dom";
+import ProfileMenu from "../components/ProfileMenu";
+import { deleteUserAccount, fetchUserById, updateUser } from "../services/api";
 
 const emptyProfile = {
   email: "",
@@ -20,7 +15,7 @@ const emptyProfile = {
   altura_cm: "",
   peso_objetivo_kg: "",
   nivel_actividad: 3,
-  objetivo: "",
+  objetivo: "mantener",
   tipo_dieta: "",
   intolerancias: [],
   calorias_objetivo: "",
@@ -41,6 +36,14 @@ const exampleProfile = {
   intolerancias: ["lactosa"],
 };
 
+const activityOptions = [
+  { value: 1, label: "Sedentario" },
+  { value: 2, label: "Ligero" },
+  { value: 3, label: "Moderado" },
+  { value: 4, label: "Activo" },
+  { value: 5, label: "Muy activo" },
+];
+
 const activityLevels = {
   1: { label: "Sedentario", factor: 1.2 },
   2: { label: "Ligero", factor: 1.375 },
@@ -52,7 +55,7 @@ const activityLevels = {
 const objectiveLabels = {
   perder: "Perder peso",
   mantener: "Mantener",
-  ganar: "Ganar músculo",
+  ganar: "Ganar musculo",
 };
 
 function firstDefined(...values) {
@@ -114,32 +117,34 @@ function getInitials(name) {
 function createProfileFromUser(user = {}, useExampleDefaults = false) {
   const defaults = useExampleDefaults ? exampleProfile : {};
   const merged = { ...defaults, ...user };
-  const fallbackWeight = useExampleDefaults ? exampleProfile.peso_kg : firstDefined(user.peso_kg, user.peso, exampleProfile.peso_kg);
-  const weight = toNumber(firstDefined(merged.peso_kg, merged.peso, fallbackWeight), exampleProfile.peso_kg);
+  const fallbackWeight = useExampleDefaults ? exampleProfile.peso_kg : firstDefined(user.peso_kg, user.peso);
+  const weight = toNumber(firstDefined(merged.peso_kg, merged.peso, fallbackWeight), "");
   const explicitTarget = firstDefined(merged.peso_objetivo_kg, merged.peso_objetivo, merged.objetivo_peso);
-  const objective = normalizeObjective(firstDefined(merged.objetivo, exampleProfile.objetivo), weight, toNumber(explicitTarget, 0));
-  const inferredTarget =
-    objective === "mantener" ? weight : objective === "ganar" ? weight + 5 : Math.max(weight - 5, 1);
-  const targetWeight = toNumber(firstDefined(explicitTarget, useExampleDefaults ? exampleProfile.peso_objetivo_kg : inferredTarget), inferredTarget);
+  const targetWeight = toNumber(firstDefined(explicitTarget, weight), "");
+  const objective = normalizeObjective(
+    firstDefined(merged.objetivo, useExampleDefaults ? exampleProfile.objetivo : ""),
+    weight,
+    targetWeight
+  );
   const birthDate = firstDefined(merged.fecha_nacimiento, merged.fechaNacimiento, "");
-  const age = firstDefined(getAgeFromBirthDate(birthDate), merged.edad, exampleProfile.edad);
-  const height = toNumber(firstDefined(merged.altura_cm, merged.altura, exampleProfile.altura_cm), exampleProfile.altura_cm);
+  const age = firstDefined(getAgeFromBirthDate(birthDate), merged.edad);
+  const height = toNumber(firstDefined(merged.altura_cm, merged.altura), "");
 
   return {
     ...emptyProfile,
     email: merged.email || "",
-    nombre: merged.nombre || exampleProfile.nombre,
+    nombre: merged.nombre || (useExampleDefaults ? exampleProfile.nombre : ""),
     edad: age?.toString() || "",
     fecha_nacimiento: birthDate || "",
     sexo: merged.sexo === "hombre" ? "hombre" : "mujer",
-    peso: weight.toString(),
-    peso_kg: weight.toString(),
-    altura: height.toString(),
-    altura_cm: height.toString(),
-    peso_objetivo_kg: targetWeight.toString(),
-    nivel_actividad: toNumber(firstDefined(merged.nivel_actividad, exampleProfile.nivel_actividad), exampleProfile.nivel_actividad),
+    peso: weight?.toString() || "",
+    peso_kg: weight?.toString() || "",
+    altura: height?.toString() || "",
+    altura_cm: height?.toString() || "",
+    peso_objetivo_kg: targetWeight?.toString() || "",
+    nivel_actividad: toNumber(firstDefined(merged.nivel_actividad, exampleProfile.nivel_actividad), 3),
     objetivo: objective,
-    tipo_dieta: firstDefined(merged.tipo_dieta, useExampleDefaults ? exampleProfile.tipo_dieta : "General"),
+    tipo_dieta: firstDefined(merged.tipo_dieta, useExampleDefaults ? exampleProfile.tipo_dieta : ""),
     intolerancias: normalizeIntolerances(
       firstDefined(merged.intolerancias, merged.intolerancia),
       useExampleDefaults ? exampleProfile.intolerancias : []
@@ -156,11 +161,11 @@ function getBmiCategory(bmi) {
 }
 
 function calculateNutritionProfile(profile) {
-  const weight = toNumber(profile.peso_kg || profile.peso, exampleProfile.peso_kg);
-  const height = toNumber(profile.altura_cm || profile.altura, exampleProfile.altura_cm);
-  const targetWeight = toNumber(profile.peso_objetivo_kg, weight);
-  const age = toNumber(firstDefined(getAgeFromBirthDate(profile.fecha_nacimiento), profile.edad), exampleProfile.edad);
-  const heightMeters = height / 100;
+  const weight = toNumber(firstDefined(profile.peso_kg, profile.peso, exampleProfile.peso_kg), exampleProfile.peso_kg);
+  const height = toNumber(firstDefined(profile.altura_cm, profile.altura, exampleProfile.altura_cm), exampleProfile.altura_cm);
+  const targetWeight = toNumber(firstDefined(profile.peso_objetivo_kg, weight), weight);
+  const age = toNumber(firstDefined(getAgeFromBirthDate(profile.fecha_nacimiento), profile.edad, exampleProfile.edad), exampleProfile.edad);
+  const heightMeters = height > 0 ? height / 100 : exampleProfile.altura_cm / 100;
   const bmi = weight / (heightMeters * heightMeters);
   const bmiCategory = getBmiCategory(bmi);
   const activity = activityLevels[profile.nivel_actividad] || activityLevels[3];
@@ -199,7 +204,7 @@ function calculateNutritionProfile(profile) {
     macros: [
       {
         key: "proteinas",
-        label: "Proteínas",
+        label: "Proteinas",
         percent: proteinPct,
         grams: Math.round((targetCalories * proteinPct) / 100 / 4),
         className: "macro-protein-fill",
@@ -222,77 +227,73 @@ function calculateNutritionProfile(profile) {
   };
 }
 
-export default function ProfilePage() {
+function optionalNumber(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseIntolerances(value) {
+  return value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function arraysMatch(left = [], right = []) {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+export default function ProfilePage({ mode = "summary" }) {
+  const isEditPage = mode === "edit";
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(emptyProfile);
+  const [savedProfile, setSavedProfile] = useState(emptyProfile);
   const [passwordData, setPasswordData] = useState({
     password: "",
     confirmPassword: "",
   });
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [intolerancesText, setIntolerancesText] = useState("");
+  const [activeMetricInfo, setActiveMetricInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [userId, setUserId] = useState(null);
-  const [friendsData, setFriendsData] = useState({
-    friends: [],
-    incoming: [],
-    outgoing: [],
-  });
-  const [friendSearchTerm, setFriendSearchTerm] = useState("");
-  const [friendSearchResults, setFriendSearchResults] = useState([]);
-  const [friendsLoading, setFriendsLoading] = useState(true);
-  const [friendsError, setFriendsError] = useState("");
-  const [friendActionLoading, setFriendActionLoading] = useState(false);
-  const [showProfileSection, setShowProfileSection] = useState(true);
-  const [showNutritionSection, setShowNutritionSection] = useState(true);
-  const [showFriendsSection, setShowFriendsSection] = useState(true);
-  const [activeMetricInfo, setActiveMetricInfo] = useState(null);
-
-  async function loadFriends(currentUserId) {
-    try {
-      setFriendsLoading(true);
-      setFriendsError("");
-      const data = await fetchFriends(currentUserId);
-      setFriendsData(data);
-    } catch (err) {
-      const message = err.message || "";
-      if (message.includes('{"detail":"Not Found"}')) {
-        setFriendsError(
-          "El backend activo no tiene el módulo de amigos. Reinicia el backend para habilitarlo."
-        );
-      } else {
-        setFriendsError(message);
-      }
-    } finally {
-      setFriendsLoading(false);
-    }
-  }
 
   useEffect(() => {
-    async function loadProfileAndFriends() {
+    async function loadProfile() {
       let storedUser = null;
 
       try {
         storedUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
 
         if (!storedUser?.id) {
-          setProfile(createProfileFromUser(exampleProfile, true));
-          setFriendsLoading(false);
+          const nextProfile = createProfileFromUser(exampleProfile, true);
+          setProfile(nextProfile);
+          setSavedProfile(nextProfile);
+          setIntolerancesText(nextProfile.intolerancias.join(", "));
           return;
         }
 
         setUserId(storedUser.id);
-
         const freshUser = await fetchUserById(storedUser.id);
-        setProfile(createProfileFromUser({ ...storedUser, ...freshUser }));
-
-        // Load friends automatically
-        await loadFriends(storedUser.id);
+        const nextProfile = createProfileFromUser({ ...storedUser, ...freshUser });
+        setProfile(nextProfile);
+        setSavedProfile(nextProfile);
+        setIntolerancesText(nextProfile.intolerancias.join(", "));
       } catch (err) {
         if (storedUser) {
-          setProfile(createProfileFromUser(storedUser));
-          setFriendsLoading(false);
+          const fallbackProfile = createProfileFromUser(storedUser);
+          setProfile(fallbackProfile);
+          setSavedProfile(fallbackProfile);
+          setIntolerancesText(fallbackProfile.intolerancias.join(", "));
         }
         setError(err.message);
       } finally {
@@ -300,14 +301,17 @@ export default function ProfilePage() {
       }
     }
 
-    loadProfileAndFriends();
+    loadProfile();
   }, []);
 
   function handleProfileChange(event) {
     const { name, value } = event.target;
+
     setProfile((prev) => ({
       ...prev,
       [name]: value,
+      ...(name === "peso" ? { peso_kg: value } : {}),
+      ...(name === "altura" ? { altura_cm: value } : {}),
     }));
   }
 
@@ -319,101 +323,74 @@ export default function ProfilePage() {
     }));
   }
 
-  function handleFriendSearchInput(event) {
-    setFriendSearchTerm(event.target.value);
-  }
-
-  async function handleFriendSearch(event) {
-    event.preventDefault();
-    setFriendsError("");
-
-    const term = friendSearchTerm.trim();
-    if (term.length < 2) {
-      setFriendsError("Escribe al menos 2 caracteres para buscar.");
-      return;
-    }
-
-    try {
-      setFriendActionLoading(true);
-      const results = await searchUsersForFriends(userId, term);
-      setFriendSearchResults(results);
-    } catch (err) {
-      setFriendsError(err.message);
-    } finally {
-      setFriendActionLoading(false);
-    }
-  }
-
-  async function handleSendInvitation(targetUserId) {
-    try {
-      setFriendActionLoading(true);
-      setFriendsError("");
-      await sendFriendInvitation(userId, targetUserId);
-      setFriendSearchResults((prev) => prev.filter((candidate) => candidate.id !== targetUserId));
-      await loadFriends(userId);
-    } catch (err) {
-      setFriendsError(err.message);
-    } finally {
-      setFriendActionLoading(false);
-    }
-  }
-
-  async function handleAcceptInvitation(invitationId) {
-    try {
-      setFriendActionLoading(true);
-      setFriendsError("");
-      await respondFriendInvitation(invitationId, userId, true);
-      await loadFriends(userId);
-    } catch (err) {
-      setFriendsError(err.message);
-    } finally {
-      setFriendActionLoading(false);
-    }
-  }
-
-  function openEditModal() {
-    setShowEditModal(true);
-    setError("");
-    setSuccess("");
-  }
-
-  function closeEditModal() {
-    setShowEditModal(false);
-    setPasswordData({ password: "", confirmPassword: "" });
-  }
-
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
     setSuccess("");
 
+    if (!userId) {
+      setError("No hay usuario activo para guardar cambios.");
+      return;
+    }
+
+    if (!profile.email.trim() || !profile.nombre.trim()) {
+      setError("El correo y el nombre son obligatorios.");
+      return;
+    }
+
+    if (!isValidEmail(profile.email.trim())) {
+      setError("Introduce un correo valido.");
+      return;
+    }
+
     if (passwordData.password || passwordData.confirmPassword) {
       if (passwordData.password.length < 6) {
-        setError("La contraseña debe tener al menos 6 caracteres.");
+        setError("La contrasena debe tener al menos 6 caracteres.");
         return;
       }
 
       if (passwordData.password !== passwordData.confirmPassword) {
-        setError("Las contraseñas no coinciden.");
+        setError("Las contrasenas no coinciden.");
         return;
       }
     }
 
     const payload = {};
+    const currentIntolerances = parseIntolerances(intolerancesText);
+    const numberFields = ["edad", "peso", "altura", "peso_objetivo_kg", "nivel_actividad", "calorias_objetivo"];
+    const fieldValues = {
+      email: profile.email.trim(),
+      nombre: profile.nombre.trim(),
+      fecha_nacimiento: profile.fecha_nacimiento || null,
+      sexo: profile.sexo,
+      objetivo: profile.objetivo,
+      tipo_dieta: profile.tipo_dieta.trim() || null,
+      intolerancias: currentIntolerances,
+    };
 
-    if (profile.email.trim()) payload.email = profile.email.trim();
-    if (profile.nombre.trim()) payload.nombre = profile.nombre.trim();
-    if (profile.edad.trim()) payload.edad = Number(profile.edad);
-    if (profile.peso.trim()) payload.peso = Number(profile.peso);
-    if (profile.altura.trim()) payload.altura = Number(profile.altura);
-    if (profile.objetivo.trim()) payload.objetivo = profile.objetivo.trim();
-    if (profile.calorias_objetivo.trim()) {
-      payload.calorias_objetivo = Number(profile.calorias_objetivo);
+    Object.entries(fieldValues).forEach(([key, value]) => {
+      if (key === "intolerancias") {
+        if (!arraysMatch(value, savedProfile.intolerancias)) payload[key] = value;
+        return;
+      }
+
+      const savedValue = key === "fecha_nacimiento" ? savedProfile[key] || null : savedProfile[key] || null;
+      if (value !== savedValue) payload[key] = value;
+    });
+
+    numberFields.forEach((key) => {
+      const value = optionalNumber(profile[key]);
+      if (value !== optionalNumber(savedProfile[key])) payload[key] = value;
+    });
+
+    if (!("peso" in payload) && "peso_kg" in payload) {
+      payload.peso = payload.peso_kg;
     }
+
     if (passwordData.password) payload.password = passwordData.password;
 
     if (Object.keys(payload).length === 0) {
-      setError("Completa al menos un dato para guardar.");
+      setSuccess("No hay cambios pendientes para guardar.");
       return;
     }
 
@@ -421,21 +398,45 @@ export default function ProfilePage() {
       setSaving(true);
       const updatedUser = await updateUser(userId, payload);
       localStorage.setItem("bf_current_user", JSON.stringify(updatedUser));
-      setSuccess("Perfil actualizado correctamente.");
-      closeEditModal();
+      window.dispatchEvent(new Event("bf:user-updated"));
+      const nextProfile = createProfileFromUser(updatedUser);
+      setProfile(nextProfile);
+      setSavedProfile(nextProfile);
+      setIntolerancesText(nextProfile.intolerancias.join(", "));
       setPasswordData({ password: "", confirmPassword: "" });
-      setProfile(
-        createProfileFromUser({
-          ...profile,
-          ...updatedUser,
-          peso_kg: updatedUser.peso ?? profile.peso_kg,
-          altura_cm: updatedUser.altura ?? profile.altura_cm,
-        })
-      );
+      setSuccess("Perfil actualizado correctamente.");
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteAccount(event) {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!userId) {
+      setError("No hay usuario activo para eliminar la cuenta.");
+      return;
+    }
+
+    if (!deletePassword) {
+      setError("Introduce tu contrasena para eliminar la cuenta.");
+      return;
+    }
+
+    try {
+      setDeletingAccount(true);
+      await deleteUserAccount(userId, deletePassword);
+      localStorage.removeItem("bf_current_user");
+      window.dispatchEvent(new Event("bf:user-updated"));
+      navigate("/", { replace: true });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -469,7 +470,7 @@ export default function ProfilePage() {
     },
     {
       key: "targetCalories",
-      label: "Objetivo calórico",
+      label: "Objetivo calorico",
       value: `${nutritionData.targetCalories} kcal`,
       detail: objectiveLabels[nutritionData.objective],
       explanation:
@@ -499,325 +500,384 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="page profile-page">
-      <div className="page-header">
-        <h2>Mi perfil</h2>
-        <p>Revisa, completa y actualiza tus datos personales.</p>
-      </div>
-
-      {error ? <p className="error-text">{error}</p> : null}
-      {success ? <p className="success-text">{success}</p> : null}
-
-      <section className="card profile-summary profile-summary-panel">
-        <button
-          type="button"
-          className="profile-friends-toggle"
-          onClick={() => setShowProfileSection((prev) => !prev)}
-          aria-expanded={showProfileSection}
-        >
-          <span>Datos actuales</span>
-          <span>{showProfileSection ? "Ocultar" : "Mostrar"}</span>
-        </button>
-
-        {showProfileSection ? (
-          <>
-            <div className="profile-summary-head">
-              <div>
-                <p>Si algún campo está vacío, puedes completarlo en el editor.</p>
-              </div>
-
-              <button type="button" className="profile-edit-button" onClick={openEditModal}>
-                Editar perfil
-              </button>
-            </div>
-
-            <div className="profile-summary-list">
-              <div><span>Correo</span><strong>{profile.email || "Sin datos"}</strong></div>
-              <div><span>Nombre</span><strong>{profile.nombre || "Sin datos"}</strong></div>
-              <div><span>Edad</span><strong>{profile.edad || "Sin datos"}</strong></div>
-              <div><span>Peso</span><strong>{profile.peso ? `${profile.peso} kg` : "Sin datos"}</strong></div>
-              <div><span>Altura</span><strong>{profile.altura ? `${profile.altura} cm` : "Sin datos"}</strong></div>
-              <div><span>Objetivo</span><strong>{profile.objetivo || "Sin datos"}</strong></div>
-              <div><span>Calorías objetivo</span><strong>{profile.calorias_objetivo || "Sin datos"}</strong></div>
-            </div>
-          </>
-        ) : null}
-      </section>
-
-      <section className="profile-nutrition-panel">
-        <button
-          type="button"
-          className="profile-friends-toggle"
-          onClick={() => setShowNutritionSection((prev) => !prev)}
-          aria-expanded={showNutritionSection}
-        >
-          <span>Datos nutricionales</span>
-          <span>{showNutritionSection ? "Ocultar" : "Mostrar"}</span>
-        </button>
-
-        {showNutritionSection ? (
-          <>
-        <header className="nutrition-profile-header">
-          <div className="nutrition-avatar" aria-hidden="true">
-            {getInitials(profile.nombre)}
-          </div>
-
-          <div className="nutrition-profile-main">
-            <h3>{profile.nombre || "Usuario"}</h3>
+    <div className="page profile-area-page profile-page">
+      <div className="profile-dashboard-layout">
+        <section className="profile-main-column">
+          <div className="page-header">
+            <h2>{isEditPage ? "Editar perfil" : "Mi perfil"}</h2>
             <p>
-              {nutritionData.age} años · {profile.sexo === "hombre" ? "Hombre" : "Mujer"}
+              {isEditPage
+                ? "Actualiza tus datos personales, nutricionales y de seguridad."
+                : "Resumen de tus datos, calculos nutricionales y progreso."}
             </p>
           </div>
 
-          <div className="nutrition-badges">
-            <span>{objectiveLabels[nutritionData.objective]}</span>
-            <span>{profile.tipo_dieta || "General"}</span>
-          </div>
-        </header>
+          {error ? <p className="error-text">{error}</p> : null}
+          {success ? <p className="success-text">{success}</p> : null}
 
-        <section className="nutrition-block">
-          <h3>Datos personales</h3>
-          <div className="nutrition-personal-list">
-            <div className="nutrition-personal-row">
-              <span className="nutrition-row-icon">kg</span>
-              <span>Peso actual</span>
-              <strong>{Math.round(nutritionData.weight)} kg</strong>
-            </div>
-            <div className="nutrition-personal-row">
-              <span className="nutrition-row-icon">cm</span>
-              <span>Altura</span>
-              <strong>{Math.round(nutritionData.height)} cm</strong>
-            </div>
-            <div className="nutrition-personal-row">
-              <span className="nutrition-row-icon">act</span>
-              <span>Actividad</span>
-              <strong>
-                {nutritionData.activity.label} · {nutritionData.activity.factor}
-              </strong>
-            </div>
-            <div className="nutrition-personal-row">
-              <span className="nutrition-row-icon">int</span>
-              <span>Intolerancias</span>
-              <strong>{intoleranceText}</strong>
-            </div>
-          </div>
-        </section>
-
-        <section className="nutrition-block">
-          <h3>Calculado automáticamente</h3>
-          <div className="nutrition-metrics-grid">
-            {metricCards.map((metric) => {
-              const isMetricInfoOpen = activeMetricInfo === metric.key;
-
-              return (
-                <div key={metric.key} className={`nutrition-metric-card ${metric.className || ""}`}>
-                  <button
-                    type="button"
-                    className="nutrition-metric-label"
-                    onClick={() => setActiveMetricInfo(metric.key)}
-                    aria-haspopup="dialog"
-                    aria-expanded={isMetricInfoOpen}
-                  >
-                    {metric.label}
-                  </button>
-                  <strong>{metric.value}</strong>
-                  <small>{metric.detail}</small>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="nutrition-block">
-          <div className="nutrition-section-head">
-            <h3>Macronutrientes diarios</h3>
-            <strong>{nutritionData.targetCalories} kcal</strong>
-          </div>
-
-          <div className="nutrition-macro-list">
-            {nutritionData.macros.map((macro) => (
-              <div key={macro.key} className="nutrition-macro-row">
-                <div className="nutrition-macro-top">
-                  <span>{macro.label}</span>
-                  <strong>{macro.grams} g</strong>
-                </div>
-                <div className="nutrition-macro-track" aria-hidden="true">
-                  <span
-                    className={`nutrition-macro-fill ${macro.className}`}
-                    style={{ width: `${macro.percent}%` }}
-                  />
-                </div>
-                <small>{macro.percent}% del objetivo calórico</small>
+          {!isEditPage ? (
+          <section className="profile-nutrition-panel profile-overview-panel">
+            <header className="nutrition-profile-header">
+              <div className="nutrition-avatar" aria-hidden="true">
+                {getInitials(profile.nombre)}
               </div>
-            ))}
-          </div>
 
-          <p className="nutrition-macro-summary">
-            {nutritionData.macros.map((macro) => `${macro.label} ${macro.percent}%`).join(" · ")} · Total{" "}
-            {nutritionData.targetCalories} kcal
-          </p>
-        </section>
-
-        <section className="nutrition-block">
-          <div className="nutrition-section-head">
-            <h3>Progreso hacia el objetivo</h3>
-            <strong>{Math.round(nutritionData.remainingKg)} kg restantes</strong>
-          </div>
-
-          <div
-            className="nutrition-weight-progress"
-            style={{ "--profile-progress": `${nutritionData.progressPercent}%` }}
-          >
-            <span className="nutrition-weight-fill" />
-          </div>
-
-          <div className="nutrition-progress-labels">
-            <span>{Math.round(nutritionData.weight)} kg actual</span>
-            <strong>
-              {nutritionData.objective === "mantener"
-                ? "En mantenimiento"
-                : `Semana actual 1 de ${nutritionData.estimatedWeeks.replace(" semanas", "")}`}
-            </strong>
-            <span>{Math.round(nutritionData.targetWeight)} kg objetivo</span>
-          </div>
-        </section>
-          </>
-        ) : null}
-      </section>
-
-      <section className="card profile-friends-panel">
-        <button
-          type="button"
-          className="profile-friends-toggle"
-          onClick={() => setShowFriendsSection((prev) => !prev)}
-          aria-expanded={showFriendsSection}
-        >
-          <span>Amigos</span>
-          <span>{showFriendsSection ? "Ocultar" : "Mostrar"}</span>
-        </button>
-
-        {showFriendsSection ? (
-          <>
-            <div className="profile-summary-head">
-              <div>
-                <h3>Buscar personas</h3>
-                <p>Busca usuarios por nombre o correo para invitarlos a tu red.</p>
+              <div className="nutrition-profile-main">
+                <h3>{profile.nombre || "Usuario"}</h3>
+                <p>
+                  {nutritionData.age} anos - {profile.sexo === "hombre" ? "Hombre" : "Mujer"}
+                </p>
               </div>
-            </div>
 
-            {friendsError ? <p className="error-text">{friendsError}</p> : null}
+              <div className="nutrition-badges">
+                <span>{objectiveLabels[nutritionData.objective]}</span>
+                <span>{profile.tipo_dieta || "General"}</span>
+              </div>
+            </header>
 
-            <form className="search-form profile-friends-search" onSubmit={handleFriendSearch}>
-              <input
-                type="text"
-                value={friendSearchTerm}
-                onChange={handleFriendSearchInput}
-                placeholder="Buscar por nombre o correo"
-              />
-              <button type="submit" disabled={friendActionLoading || !userId}>
-                Buscar
-              </button>
-            </form>
+            <section className="nutrition-block">
+              <h3>Datos actuales</h3>
+              <div className="profile-summary-list profile-overview-list">
+                <div>
+                  <span>Correo</span>
+                  <strong>{profile.email || "Sin datos"}</strong>
+                </div>
+                <div>
+                  <span>Edad</span>
+                  <strong>{profile.edad || "Sin datos"}</strong>
+                </div>
+                <div>
+                  <span>Peso</span>
+                  <strong>{Math.round(nutritionData.weight)} kg</strong>
+                </div>
+                <div>
+                  <span>Altura</span>
+                  <strong>{Math.round(nutritionData.height)} cm</strong>
+                </div>
+                <div>
+                  <span>Peso objetivo</span>
+                  <strong>{Math.round(nutritionData.targetWeight)} kg</strong>
+                </div>
+                <div>
+                  <span>Intolerancias</span>
+                  <strong>{intoleranceText}</strong>
+                </div>
+              </div>
+            </section>
 
-            {friendSearchResults.length > 0 ? (
-              <div className="profile-friends-search-results">
-                {friendSearchResults.map((candidate) => (
-                  <div key={candidate.id} className="profile-friend-row">
-                    <div>
-                      <strong>{candidate.nombre}</strong>
-                      <p>{candidate.email}</p>
+            <section className="nutrition-block">
+              <h3>Calculado automaticamente</h3>
+              <div className="nutrition-metrics-grid">
+                {metricCards.map((metric) => {
+                  const isMetricInfoOpen = activeMetricInfo === metric.key;
+
+                  return (
+                    <div key={metric.key} className={`nutrition-metric-card ${metric.className || ""}`}>
+                      <button
+                        type="button"
+                        className="nutrition-metric-label"
+                        onClick={() => setActiveMetricInfo(metric.key)}
+                        aria-haspopup="dialog"
+                        aria-expanded={isMetricInfoOpen}
+                      >
+                        {metric.label}
+                      </button>
+                      <strong>{metric.value}</strong>
+                      <small>{metric.detail}</small>
                     </div>
-                    <button
-                      type="button"
-                      className="profile-edit-button"
-                      onClick={() => handleSendInvitation(candidate.id)}
-                      disabled={friendActionLoading}
-                    >
-                      Invitar
-                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="nutrition-block">
+              <div className="nutrition-section-head">
+                <h3>Macronutrientes diarios</h3>
+                <strong>{nutritionData.targetCalories} kcal</strong>
+              </div>
+
+              <div className="nutrition-macro-list">
+                {nutritionData.macros.map((macro) => (
+                  <div key={macro.key} className="nutrition-macro-row">
+                    <div className="nutrition-macro-top">
+                      <span>{macro.label}</span>
+                      <strong>{macro.grams} g</strong>
+                    </div>
+                    <div className="nutrition-macro-track" aria-hidden="true">
+                      <span
+                        className={`nutrition-macro-fill ${macro.className}`}
+                        style={{ width: `${macro.percent}%` }}
+                      />
+                    </div>
+                    <small>{macro.percent}% del objetivo calorico</small>
                   </div>
                 ))}
               </div>
-            ) : null}
 
-            <section className="card profile-friends-panel">
-              <div className="profile-summary-head">
-                <div>
-                  <h3>Mis amigos</h3>
-                  <p>Personas que ya aceptaron tu invitación o tú aceptaste la suya.</p>
-                </div>
-                <button
-                  type="button"
-                  className="profile-edit-button"
-                  disabled={!userId || friendActionLoading}
-                  onClick={() => loadFriends(userId)}
-                >
-                  Actualizar
-                </button>
-              </div>
-
-              {friendsLoading ? (
-                <p>Cargando amigos...</p>
-              ) : friendsData.friends.length === 0 ? (
-                <p className="item-note">Todavía no tienes amigos agregados.</p>
-              ) : (
-                <div className="profile-friends-search-results">
-                  {friendsData.friends.map((friend) => (
-                    <div key={friend.id} className="profile-friend-row">
-                      <div>
-                        <strong>{friend.nombre}</strong>
-                        <p>{friend.email}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <p className="nutrition-macro-summary">
+                {nutritionData.macros.map((macro) => `${macro.label} ${macro.percent}%`).join(" - ")} - Total{" "}
+                {nutritionData.targetCalories} kcal
+              </p>
             </section>
 
-            <section className="card profile-friends-panel">
-              <div className="profile-summary-head">
-                <div>
-                  <h3>Invitaciones recibidas</h3>
-                  <p>Acepta solicitudes para añadir nuevos amigos.</p>
-                </div>
-                <button
-                  type="button"
-                  className="profile-edit-button"
-                  disabled={!userId || friendActionLoading}
-                  onClick={() => loadFriends(userId)}
-                >
-                  Actualizar
-                </button>
+            <section className="nutrition-block">
+              <div className="nutrition-section-head">
+                <h3>Progreso hacia el objetivo</h3>
+                <strong>{Math.round(nutritionData.remainingKg)} kg restantes</strong>
               </div>
 
-              {friendsLoading ? (
-                <p>Cargando invitaciones...</p>
-              ) : friendsData.incoming.length === 0 ? (
-                <p className="item-note">No tienes invitaciones pendientes.</p>
-              ) : (
-                <div className="profile-friends-search-results">
-                  {friendsData.incoming.map((invitation) => (
-                    <div key={invitation.invitation_id} className="profile-friend-row">
-                      <div>
-                        <strong>{invitation.user.nombre}</strong>
-                        <p>{invitation.user.email}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="profile-edit-button"
-                        disabled={friendActionLoading}
-                        onClick={() => handleAcceptInvitation(invitation.invitation_id)}
-                      >
-                        Aceptar
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div
+                className="nutrition-weight-progress"
+                style={{ "--profile-progress": `${nutritionData.progressPercent}%` }}
+              >
+                <span className="nutrition-weight-fill" />
+              </div>
+
+              <div className="nutrition-progress-labels">
+                <span>{Math.round(nutritionData.weight)} kg actual</span>
+                <strong>
+                  {nutritionData.objective === "mantener"
+                    ? "En mantenimiento"
+                    : `Semana actual 1 de ${nutritionData.estimatedWeeks.replace(" semanas", "")}`}
+                </strong>
+                <span>{Math.round(nutritionData.targetWeight)} kg objetivo</span>
+              </div>
             </section>
-          </>
-        ) : null}
-      </section>
+          </section>
+          ) : (
+            <section className="profile-data-panel profile-edit-side-panel profile-edit-page-panel">
+              <form onSubmit={handleSubmit} className="profile-side-form" noValidate>
+                <section className="profile-form-section">
+                  <div className="profile-section-title">
+                    <h3>Datos personales</h3>
+                  </div>
+
+                  <div className="profile-form-grid">
+                    <label className="field-group">
+                      <span>Correo</span>
+                      <input
+                        name="email"
+                        type="email"
+                        value={profile.email}
+                        onChange={handleProfileChange}
+                        placeholder="correo@dominio.com"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Nombre</span>
+                      <input
+                        name="nombre"
+                        type="text"
+                        value={profile.nombre}
+                        onChange={handleProfileChange}
+                        placeholder="Tu nombre"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Fecha de nacimiento</span>
+                      <input
+                        name="fecha_nacimiento"
+                        type="date"
+                        value={profile.fecha_nacimiento}
+                        onChange={handleProfileChange}
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Edad</span>
+                      <input
+                        name="edad"
+                        type="number"
+                        min="0"
+                        value={profile.edad}
+                        onChange={handleProfileChange}
+                        placeholder="Ej. 28"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Genero</span>
+                      <select name="sexo" value={profile.sexo} onChange={handleProfileChange}>
+                        <option value="mujer">Mujer</option>
+                        <option value="hombre">Hombre</option>
+                      </select>
+                    </label>
+                  </div>
+                </section>
+
+                <section className="profile-form-section">
+                  <div className="profile-section-title">
+                    <h3>Nutricion</h3>
+                  </div>
+
+                  <div className="profile-form-grid">
+                    <label className="field-group">
+                      <span>Peso actual (kg)</span>
+                      <input
+                        name="peso"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={profile.peso}
+                        onChange={handleProfileChange}
+                        placeholder="Ej. 72.5"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Peso objetivo (kg)</span>
+                      <input
+                        name="peso_objetivo_kg"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={profile.peso_objetivo_kg}
+                        onChange={handleProfileChange}
+                        placeholder="Ej. 68"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Altura (cm)</span>
+                      <input
+                        name="altura"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={profile.altura}
+                        onChange={handleProfileChange}
+                        placeholder="Ej. 175"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Nivel de actividad</span>
+                      <select name="nivel_actividad" value={profile.nivel_actividad} onChange={handleProfileChange}>
+                        {activityOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="field-group">
+                      <span>Objetivo</span>
+                      <select name="objetivo" value={profile.objetivo} onChange={handleProfileChange}>
+                        <option value="perder">Perder peso</option>
+                        <option value="mantener">Mantener</option>
+                        <option value="ganar">Ganar musculo</option>
+                      </select>
+                    </label>
+
+                    <label className="field-group">
+                      <span>Tipo de dieta</span>
+                      <input
+                        name="tipo_dieta"
+                        type="text"
+                        value={profile.tipo_dieta}
+                        onChange={handleProfileChange}
+                        placeholder="Ej. Mediterranea"
+                      />
+                    </label>
+
+                    <label className="field-group field-group-full">
+                      <span>Intolerancias</span>
+                      <input
+                        type="text"
+                        value={intolerancesText}
+                        onChange={(event) => setIntolerancesText(event.target.value)}
+                        placeholder="Separadas por comas"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Calorias objetivo</span>
+                      <input
+                        name="calorias_objetivo"
+                        type="number"
+                        min="0"
+                        value={profile.calorias_objetivo}
+                        onChange={handleProfileChange}
+                        placeholder="Ej. 2200"
+                      />
+                    </label>
+                  </div>
+                </section>
+
+                <section className="profile-form-section">
+                  <div className="profile-section-title">
+                    <h3>Seguridad</h3>
+                  </div>
+
+                  <div className="profile-form-grid">
+                    <label className="field-group">
+                      <span>Nueva contrasena</span>
+                      <input
+                        name="password"
+                        type="password"
+                        value={passwordData.password}
+                        onChange={handlePasswordChange}
+                        placeholder="Opcional"
+                      />
+                    </label>
+
+                    <label className="field-group">
+                      <span>Confirmar contrasena</span>
+                      <input
+                        name="confirmPassword"
+                        type="password"
+                        value={passwordData.confirmPassword}
+                        onChange={handlePasswordChange}
+                        placeholder="Opcional"
+                      />
+                    </label>
+                  </div>
+                </section>
+
+                <button type="submit" className="profile-save-button" disabled={saving}>
+                  {saving ? "Guardando..." : "Guardar cambios"}
+                </button>
+
+                {error || success ? (
+                  <p className={error ? "error-text profile-form-feedback" : "success-text profile-form-feedback"}>
+                    {error || success}
+                  </p>
+                ) : null}
+              </form>
+
+              <section className="profile-delete-section">
+                <div className="profile-section-title">
+                  <h3>Eliminar cuenta</h3>
+                  <p>Esta accion borrara tu cuenta y cerrara la sesion.</p>
+                </div>
+
+                <form onSubmit={handleDeleteAccount} className="profile-delete-form">
+                  <label className="field-group">
+                    <span>Contrasena actual</span>
+                    <input
+                      type="password"
+                      value={deletePassword}
+                      onChange={(event) => setDeletePassword(event.target.value)}
+                      placeholder="Escribe tu contrasena"
+                    />
+                  </label>
+
+                  <button type="submit" className="profile-delete-button" disabled={deletingAccount}>
+                    {deletingAccount ? "Eliminando..." : "Eliminar cuenta"}
+                  </button>
+                </form>
+              </section>
+            </section>
+          )}
+        </section>
+
+        <aside className="profile-side-column">
+          <ProfileMenu />
+        </aside>
+      </div>
 
       {selectedMetricInfo ? (
         <div className="modal-overlay">
@@ -825,7 +885,7 @@ export default function ProfilePage() {
             type="button"
             className="modal-backdrop"
             onClick={() => setActiveMetricInfo(null)}
-            aria-label="Cerrar pop-up de explicación"
+            aria-label="Cerrar pop-up de explicacion"
           />
 
           <div
@@ -843,9 +903,9 @@ export default function ProfilePage() {
                 type="button"
                 className="close-button"
                 onClick={() => setActiveMetricInfo(null)}
-                aria-label="Cerrar explicación"
+                aria-label="Cerrar explicacion"
               >
-                ×
+                x
               </button>
             </div>
 
@@ -859,151 +919,6 @@ export default function ProfilePage() {
           </div>
         </div>
       ) : null}
-
-      {showEditModal && (
-        <div className="modal-overlay">
-          <button
-            type="button"
-            className="modal-backdrop"
-            onClick={closeEditModal}
-            aria-label="Cerrar editor de perfil"
-          />
-
-          <div className="modal-card profile-modal-card">
-            <div className="modal-header">
-              <h3>Editar perfil</h3>
-              <button type="button" className="close-button" onClick={closeEditModal} aria-label="Cerrar ventana">
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="profile-form profile-modal-form">
-              <div className="field-group">
-                <label htmlFor="email">Correo</label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={profile.email}
-                  onChange={handleProfileChange}
-                  placeholder="correo@dominio.com"
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="nombre">Nombre</label>
-                <input
-                  id="nombre"
-                  name="nombre"
-                  type="text"
-                  value={profile.nombre}
-                  onChange={handleProfileChange}
-                  placeholder="Tu nombre"
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="edad">Edad</label>
-                <input
-                  id="edad"
-                  name="edad"
-                  type="number"
-                  min="0"
-                  value={profile.edad}
-                  onChange={handleProfileChange}
-                  placeholder="Ej. 28"
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="peso">Peso (kg)</label>
-                <input
-                  id="peso"
-                  name="peso"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={profile.peso}
-                  onChange={handleProfileChange}
-                  placeholder="Ej. 72.5"
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="altura">Altura (cm)</label>
-                <input
-                  id="altura"
-                  name="altura"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value={profile.altura}
-                  onChange={handleProfileChange}
-                  placeholder="Ej. 175"
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="objetivo">Objetivo</label>
-                <input
-                  id="objetivo"
-                  name="objetivo"
-                  type="text"
-                  value={profile.objetivo}
-                  onChange={handleProfileChange}
-                  placeholder="Ej. Definición"
-                />
-              </div>
-
-              <div className="field-group">
-                <label htmlFor="calorias_objetivo">Calorías objetivo</label>
-                <input
-                  id="calorias_objetivo"
-                  name="calorias_objetivo"
-                  type="number"
-                  min="0"
-                  value={profile.calorias_objetivo}
-                  onChange={handleProfileChange}
-                  placeholder="Ej. 2200"
-                />
-              </div>
-
-              <div className="profile-password-box">
-                <h4>Cambiar contraseña</h4>
-                <p>Si no quieres cambiarla, deja estos campos vacíos.</p>
-
-                <div className="field-group">
-                  <label htmlFor="password">Nueva contraseña</label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    value={passwordData.password}
-                    onChange={handlePasswordChange}
-                    placeholder="Nueva contraseña"
-                  />
-                </div>
-
-                <div className="field-group">
-                  <label htmlFor="confirmPassword">Confirmar contraseña</label>
-                  <input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    value={passwordData.confirmPassword}
-                    onChange={handlePasswordChange}
-                    placeholder="Repite la nueva contraseña"
-                  />
-                </div>
-              </div>
-
-              <button type="submit" className="profile-save-button" disabled={saving}>
-                {saving ? "Guardando..." : "Guardar cambios"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -36,6 +36,10 @@ class UserUpdate(BaseModel):
     calorias_objetivo: int | None = None
 
 
+class UserDeleteConfirm(BaseModel):
+    password: str
+
+
 class UserResponse(UserCreate):
     id: int
 
