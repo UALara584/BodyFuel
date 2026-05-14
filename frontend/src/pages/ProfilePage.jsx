@@ -32,7 +32,7 @@ const exampleProfile = {
   peso_objetivo_kg: 58,
   nivel_actividad: 3,
   objetivo: "perder",
-  tipo_dieta: "Mediterranea",
+  tipo_dieta: "Mediterránea",
   intolerancias: ["lactosa"],
 };
 
@@ -55,7 +55,7 @@ const activityLevels = {
 const objectiveLabels = {
   perder: "Perder peso",
   mantener: "Mantener",
-  ganar: "Ganar musculo",
+  ganar: "Ganar músculo",
 };
 
 function firstDefined(...values) {
@@ -204,7 +204,7 @@ function calculateNutritionProfile(profile) {
     macros: [
       {
         key: "proteinas",
-        label: "Proteinas",
+        label: "Proteínas",
         percent: proteinPct,
         grams: Math.round((targetCalories * proteinPct) / 100 / 4),
         className: "macro-protein-fill",
@@ -350,18 +350,18 @@ export default function ProfilePage({ mode = "summary" }) {
     }
 
     if (!isValidEmail(profile.email.trim())) {
-      setError("Introduce un correo valido.");
+      setError("Introduce un correo válido.");
       return;
     }
 
     if (passwordData.password || passwordData.confirmPassword) {
       if (passwordData.password.length < 6) {
-        setError("La contrasena debe tener al menos 6 caracteres.");
+        setError("La contraseña debe tener al menos 6 caracteres.");
         return;
       }
 
       if (passwordData.password !== passwordData.confirmPassword) {
-        setError("Las contrasenas no coinciden.");
+        setError("Las contraseñas no coinciden.");
         return;
       }
     }
@@ -445,7 +445,7 @@ export default function ProfilePage({ mode = "summary" }) {
     }
 
     if (!deletePassword) {
-      setError("Introduce tu contrasena para eliminar la cuenta.");
+      setError("Introduce tu contraseña para eliminar la cuenta.");
       return;
     }
 
@@ -472,7 +472,7 @@ export default function ProfilePage({ mode = "summary" }) {
       detail: nutritionData.bmiCategory.label,
       className: nutritionData.bmiCategory.className,
       explanation:
-        "Compara tu peso con tu altura para orientar si estas en un rango bajo, normal o alto. Es una guia general: no distingue musculo, grasa ni otros detalles personales.",
+        "Compara tu peso con tu altura para orientar si estás en un rango bajo, normal o alto. Es una guía general: no distingue músculo, grasa ni otros detalles personales.",
     },
     {
       key: "tmb",
@@ -480,7 +480,7 @@ export default function ProfilePage({ mode = "summary" }) {
       value: `${nutritionData.bmr} kcal`,
       detail: "Reposo diario",
       explanation:
-        "Es la energia que tu cuerpo gastaria en reposo para funciones basicas como respirar, mantener la temperatura y que los organos trabajen.",
+        "Es la energía que tu cuerpo gastaría en reposo para funciones básicas como respirar, mantener la temperatura y que los órganos trabajen.",
     },
     {
       key: "tdee",
@@ -488,15 +488,15 @@ export default function ProfilePage({ mode = "summary" }) {
       value: `${nutritionData.tdee} kcal`,
       detail: nutritionData.activity.label,
       explanation:
-        "Es tu gasto total diario: suma lo que gastas en reposo y lo que gastas por moverte o entrenar. Ayuda a estimar las calorias para mantener tu peso.",
+        "Es tu gasto total diario: suma lo que gastas en reposo y lo que gastas por moverte o entrenar. Ayuda a estimar las calorías para mantener tu peso.",
     },
     {
       key: "targetCalories",
-      label: "Objetivo calorico",
+      label: "Objetivo calórico",
       value: `${nutritionData.targetCalories} kcal`,
       detail: objectiveLabels[nutritionData.objective],
       explanation:
-        "Son las calorias diarias recomendadas segun tu meta: menos para perder peso, parecidas para mantener o algo mas para ganar musculo.",
+        "Son las calorías diarias recomendadas según tu meta: menos para perder peso, parecidas para mantener o algo más para ganar músculo.",
     },
     {
       key: "water",
@@ -504,7 +504,7 @@ export default function ProfilePage({ mode = "summary" }) {
       value: `${nutritionData.waterLiters.toFixed(1)} L`,
       detail: "35 ml por kg",
       explanation:
-        "Es una estimacion de agua al dia basada en tu peso. Puede subir si hace calor, entrenas mucho o sudas mas de lo habitual.",
+        "Es una estimación de agua al día basada en tu peso. Puede subir si hace calor, entrenas mucho o sudas más de lo habitual.",
     },
     {
       key: "estimatedWeeks",
@@ -530,7 +530,7 @@ export default function ProfilePage({ mode = "summary" }) {
             <p>
               {isEditPage
                 ? "Actualiza tus datos personales, nutricionales y de seguridad."
-                : "Resumen de tus datos, calculos nutricionales y progreso."}
+                : "Resumen de tus datos, cálculos nutricionales y progreso."}
             </p>
           </div>
 
@@ -547,7 +547,7 @@ export default function ProfilePage({ mode = "summary" }) {
               <div className="nutrition-profile-main">
                 <h3>{profile.nombre || "Usuario"}</h3>
                 <p>
-                  {nutritionData.age} anos - {profile.sexo === "hombre" ? "Hombre" : "Mujer"}
+                  {nutritionData.age} años - {profile.sexo === "hombre" ? "Hombre" : "Mujer"}
                 </p>
               </div>
 
@@ -588,7 +588,7 @@ export default function ProfilePage({ mode = "summary" }) {
             </section>
 
             <section className="nutrition-block">
-              <h3>Calculado automaticamente</h3>
+              <h3>Calculado automáticamente</h3>
               <div className="nutrition-metrics-grid">
                 {metricCards.map((metric) => {
                   const isMetricInfoOpen = activeMetricInfo === metric.key;
@@ -631,7 +631,7 @@ export default function ProfilePage({ mode = "summary" }) {
                         style={{ width: `${macro.percent}%` }}
                       />
                     </div>
-                    <small>{macro.percent}% del objetivo calorico</small>
+                    <small>{macro.percent}% del objetivo calórico</small>
                   </div>
                 ))}
               </div>
@@ -667,7 +667,7 @@ export default function ProfilePage({ mode = "summary" }) {
             </section>
           </section>
           ) : (
-            <section className="profile-data-panel profile-edit-side-panel profile-edit-page-panel">
+      <section className="profile-data-panel profile-edit-side-panel profile-edit-page-panel">
               <form onSubmit={handleSubmit} className="profile-side-form" noValidate>
                 <section className="profile-form-section">
                   <div className="profile-section-title">
@@ -720,7 +720,7 @@ export default function ProfilePage({ mode = "summary" }) {
                     </label>
 
                     <label className="field-group">
-                      <span>Genero</span>
+                      <span>Género</span>
                       <select name="sexo" value={profile.sexo} onChange={handleProfileChange}>
                         <option value="mujer">Mujer</option>
                         <option value="hombre">Hombre</option>
@@ -731,7 +731,7 @@ export default function ProfilePage({ mode = "summary" }) {
 
                 <section className="profile-form-section">
                   <div className="profile-section-title">
-                    <h3>Nutricion</h3>
+                    <h3>Nutrición</h3>
                   </div>
 
                   <div className="profile-form-grid">
@@ -790,7 +790,7 @@ export default function ProfilePage({ mode = "summary" }) {
                       <select name="objetivo" value={profile.objetivo} onChange={handleProfileChange}>
                         <option value="perder">Perder peso</option>
                         <option value="mantener">Mantener</option>
-                        <option value="ganar">Ganar musculo</option>
+                        <option value="ganar">Ganar músculo</option>
                       </select>
                     </label>
 
@@ -801,7 +801,7 @@ export default function ProfilePage({ mode = "summary" }) {
                         type="text"
                         value={profile.tipo_dieta}
                         onChange={handleProfileChange}
-                        placeholder="Ej. Mediterranea"
+                        placeholder="Ej. Mediterránea"
                       />
                     </label>
 
@@ -816,7 +816,7 @@ export default function ProfilePage({ mode = "summary" }) {
                     </label>
 
                     <label className="field-group">
-                      <span>Calorias objetivo</span>
+                      <span>Calorías objetivo</span>
                       <input
                         name="calorias_objetivo"
                         type="number"
@@ -836,7 +836,7 @@ export default function ProfilePage({ mode = "summary" }) {
 
                   <div className="profile-form-grid">
                     <label className="field-group">
-                      <span>Nueva contrasena</span>
+                      <span>Nueva contraseña</span>
                       <input
                         name="password"
                         type="password"
@@ -847,7 +847,7 @@ export default function ProfilePage({ mode = "summary" }) {
                     </label>
 
                     <label className="field-group">
-                      <span>Confirmar contrasena</span>
+                      <span>Confirmar contraseña</span>
                       <input
                         name="confirmPassword"
                         type="password"
@@ -873,17 +873,17 @@ export default function ProfilePage({ mode = "summary" }) {
               <section className="profile-delete-section">
                 <div className="profile-section-title">
                   <h3>Eliminar cuenta</h3>
-                  <p>Esta accion borrara tu cuenta y cerrara la sesion.</p>
+                  <p>Esta acción borrará tu cuenta y cerrará la sesión.</p>
                 </div>
 
                 <form onSubmit={handleDeleteAccount} className="profile-delete-form">
                   <label className="field-group">
-                    <span>Contrasena actual</span>
+                    <span>Contraseña actual</span>
                     <input
                       type="password"
                       value={deletePassword}
                       onChange={(event) => setDeletePassword(event.target.value)}
-                      placeholder="Escribe tu contrasena"
+                      placeholder="Escribe tu contraseña"
                     />
                   </label>
 
@@ -907,7 +907,7 @@ export default function ProfilePage({ mode = "summary" }) {
             type="button"
             className="modal-backdrop"
             onClick={() => setActiveMetricInfo(null)}
-            aria-label="Cerrar pop-up de explicacion"
+            aria-label="Cerrar pop-up de explicación"
           />
 
           <div
@@ -925,7 +925,7 @@ export default function ProfilePage({ mode = "summary" }) {
                 type="button"
                 className="close-button"
                 onClick={() => setActiveMetricInfo(null)}
-                aria-label="Cerrar explicacion"
+                aria-label="Cerrar explicación"
               >
                 x
               </button>

@@ -37,6 +37,16 @@ function normalizeDay(dayValue) {
   return (dayValue || "").toLowerCase();
 }
 
+function truncateScrapingRecipeName(name, maxLength = 28) {
+  const cleanName = (name || "Receta").trim().replace(/\s+/g, " ");
+
+  if (cleanName.length <= maxLength) {
+    return cleanName;
+  }
+
+  return `${cleanName.slice(0, maxLength).trim()}...`;
+}
+
 export default function PlanPage() {
   const [plan, setPlan] = useState(null);
   const [foods, setFoods] = useState([]);
@@ -350,7 +360,8 @@ export default function PlanPage() {
                               key={`scraping-recipe-${recipe.id}`}
                               type="button"
                               draggable
-                              className="plan-draggable-item"
+                              className="plan-draggable-item plan-draggable-item-compact"
+                              title={recipe.nombre}
                               onDragStart={(event) =>
                                 handleDragStart(
                                   { kind: "recipe", id: recipe.id, nombre: recipe.nombre },
@@ -358,7 +369,7 @@ export default function PlanPage() {
                                 )
                               }
                             >
-                              <strong>{recipe.nombre}</strong>
+                              <strong>{truncateScrapingRecipeName(recipe.nombre)}</strong>
                               <span>Receta scraping</span>
                             </button>
                           ))

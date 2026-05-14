@@ -242,7 +242,7 @@ export default function RecipesPage() {
     }
   }
 
-  function renderRecipeCards(list, emptyText, isScraping = false) {
+  function renderRecipeCards(list, emptyText) {
     if (list.length === 0) {
       return (
         <div className="card">
@@ -279,7 +279,7 @@ export default function RecipesPage() {
           <p>Crea tus recetas con alimentos reales y macros calculados automáticamente.</p>
         </div>
 
-        <button className="add-button" type="button" onClick={openModal}>
+        <button className="add-button" type="button" onClick={openModal} aria-label="Crear receta">
           +
         </button>
       </div>
@@ -322,8 +322,7 @@ export default function RecipesPage() {
         <section className="recipe-section">
           {renderRecipeCards(
             filteredManualRecipes,
-            "No tienes recetas manuales todavía.",
-            false
+            "No tienes recetas manuales todavía."
           )}
         </section>
       )}
@@ -332,8 +331,7 @@ export default function RecipesPage() {
         <section className="recipe-section">
           {renderRecipeCards(
             filteredScrapingRecipes,
-            "No hay recetas scrapeadas disponibles.",
-            true
+            "No hay recetas scrapeadas disponibles."
           )}
         </section>
       )}
@@ -346,7 +344,7 @@ export default function RecipesPage() {
           >
             <div className="modal-header">
               <h3>Crear receta</h3>
-              <button className="close-button" type="button" onClick={closeModal}>
+              <button className="close-button" type="button" onClick={closeModal} aria-label="Cerrar modal">
                 ×
               </button>
             </div>
@@ -495,6 +493,7 @@ export default function RecipesPage() {
                 className="close-button"
                 type="button"
                 onClick={closeRecipeDetail}
+                aria-label="Cerrar detalle de receta"
               >
                 ×
               </button>
@@ -547,7 +546,7 @@ export default function RecipesPage() {
                     rel="noopener noreferrer"
                     className="source-link-button"
                   >
-                    🔗 Ver receta completa en la fuente original
+                    Ver receta completa en la fuente original
                   </a>
                 </div>
               ) : null}
@@ -591,6 +590,7 @@ export default function RecipesPage() {
                 type="button"
                 onClick={closeDeleteConfirm}
                 disabled={deletingRecipe}
+                aria-label="Cerrar confirmación"
               >
                 ×
               </button>

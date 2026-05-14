@@ -154,7 +154,7 @@ export default function FoodsPage() {
           <p>Busca en BodyFuel y en la API externa desde un único buscador.</p>
         </div>
 
-        <button className="add-button" onClick={openModal} type="button">
+        <button className="add-button" onClick={openModal} type="button" aria-label="Crear alimento">
           +
         </button>
       </div>
@@ -271,7 +271,7 @@ export default function FoodsPage() {
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Crear alimento</h3>
-              <button className="close-button" onClick={closeModal} type="button">
+              <button className="close-button" onClick={closeModal} type="button" aria-label="Cerrar modal">
                 ×
               </button>
             </div>

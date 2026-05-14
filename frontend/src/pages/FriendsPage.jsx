@@ -164,7 +164,7 @@ export default function FriendsPage() {
             <div className="profile-summary-head">
               <div>
                 <h3>Mis amigos</h3>
-                <p>Personas que ya aceptaron tu invitacion o tu aceptaste la suya.</p>
+                <p>Personas que ya aceptaron tu invitación o tu aceptaste la suya.</p>
               </div>
               <button
                 type="button"
@@ -198,7 +198,7 @@ export default function FriendsPage() {
             <div className="profile-summary-head">
               <div>
                 <h3>Invitaciones recibidas</h3>
-                <p>Acepta solicitudes para anadir nuevos amigos.</p>
+                <p>Acepta solicitudes para añadir nuevos amigos.</p>
               </div>
               <button
                 type="button"

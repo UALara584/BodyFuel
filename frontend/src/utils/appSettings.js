@@ -1,7 +1,7 @@
 export const APP_SETTINGS_STORAGE_KEY = "bf_app_settings";
 
 export const DEFAULT_APP_SETTINGS = {
-  theme: "dark",
+  theme: "light",
   units: "metric",
   weeklyReminders: true,
   assistantPersonalization: true,

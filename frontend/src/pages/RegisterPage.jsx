@@ -120,7 +120,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="auth-page auth-page--neon">
+    <div className="auth-page">
       <div className="auth-card auth-card-large auth-card-elevated">
         <div className="auth-topbar">
           <p className="auth-kicker">BODYFUEL</p>

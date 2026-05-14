@@ -6,12 +6,12 @@ const profileMenuItems = [
     to: "/profile/edit",
     activePaths: ["/profile/edit"],
     label: "Editar perfil",
-    description: "Datos personales y nutricion",
+    description: "Datos personales y nutrición",
   },
   {
     to: "/settings",
     activePaths: ["/settings", "/profile/settings"],
-    label: "Ajustes de la aplicacion",
+    label: "Ajustes de la aplicación",
     description: "Tema y preferencias",
   },
   {
@@ -34,7 +34,7 @@ export default function ProfileMenu() {
         onClick={() => setIsOpen((current) => !current)}
         aria-expanded={isOpen}
       >
-        <span>Menu de perfil</span>
+        <span>Menú de perfil</span>
         <span className={`profile-menu-chevron ${isOpen ? "open" : ""}`} aria-hidden="true">
           v
         </span>

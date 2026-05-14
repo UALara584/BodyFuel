@@ -68,6 +68,18 @@ function NavIcon({ name }) {
   );
 }
 
+function BrandMark() {
+  return (
+    <svg className="brand-mark-icon" viewBox="0 0 32 32" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        <path strokeWidth="2.2" d="M16 27c6.2-3.4 10-8.2 10-13.3 0-4.5-3.7-8.1-8.2-8.1-1.1 0-2.2.2-3.2.7" />
+        <path strokeWidth="2.2" d="M14.8 26.7C9.4 23.1 6 18.6 6 13.8 6 9.2 9.7 5.6 14.2 5.6c1.2 0 2.4.3 3.5.8" />
+        <path strokeWidth="2" d="M9.7 16h4.4l2.1-5.1 3 9.4 2-4.3h3.1" />
+      </g>
+    </svg>
+  );
+}
+
 function NavLinkItem({ to, icon, children }) {
   const location = useLocation();
   const isProfileArea = [
@@ -143,7 +155,7 @@ function AppLayout() {
         localStorage.setItem("bf_current_user", JSON.stringify(nextUser));
         setCurrentUser(nextUser);
       } catch {
-        // Mantiene la sesion local si el backend no esta disponible en ese momento.
+        // Mantiene la sesión local si el backend no está disponible en ese momento.
       }
     }
 
@@ -163,15 +175,24 @@ function AppLayout() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <div className="header-text app-header-inner">
-          <div>
-            <h1>BodyFuel</h1>
-            <p>Hola, {userName}. Planifica tu nutrición semanal.</p>
+        <div className="app-header-inner">
+          <div className="brand-lockup">
+            <div className="brand-mark">
+              <BrandMark />
+            </div>
+            <div className="brand-copy">
+              <p className="brand-kicker">Nutrición y rendimiento</p>
+              <h1>BodyFuel</h1>
+              <p>Planificación inteligente para comer, entrenar y progresar mejor.</p>
+            </div>
           </div>
 
-          <button type="button" className="logout-button" onClick={handleLogout}>
-            Cerrar sesión
-          </button>
+          <div className="header-actions">
+            <span className="header-user">Hola, {userName}</span>
+            <button type="button" className="logout-button" onClick={handleLogout}>
+              Cerrar sesión
+            </button>
+          </div>
         </div>
       </header>
 

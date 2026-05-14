@@ -161,6 +161,30 @@ export async function fetchTrackingByUser(userId) {
   return handleResponse(response, "Error al obtener seguimiento");
 }
 
+export async function createTracking(trackingData) {
+  const response = await fetch(`${API_BASE_URL}/tracking/`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(trackingData),
+  });
+
+  return handleResponse(response, "Error al crear seguimiento");
+}
+
+export async function updateTracking(trackingId, trackingData) {
+  const response = await fetch(`${API_BASE_URL}/tracking/${trackingId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(trackingData),
+  });
+
+  return handleResponse(response, "Error al actualizar seguimiento");
+}
+
 export async function registerUser(userData) {
   const response = await fetch(`${API_BASE_URL}/users/`, {
     method: "POST",

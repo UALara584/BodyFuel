@@ -31,7 +31,7 @@ export default function SettingsPage() {
       <div className="profile-dashboard-layout">
         <section className="profile-main-column">
           <div className="page-header">
-            <h2>Ajustes de la aplicacion</h2>
+            <h2>Ajustes de la aplicación</h2>
             <p>Configura la experiencia de BodyFuel.</p>
           </div>
 
@@ -42,7 +42,7 @@ export default function SettingsPage() {
               <h3>Apariencia</h3>
             </div>
 
-            <div className="settings-theme-toggle" role="group" aria-label="Tema de la aplicacion">
+            <div className="settings-theme-toggle" role="group" aria-label="Tema de la aplicación">
               <button
                 type="button"
                 className={settings.theme === "dark" ? "active" : ""}
@@ -69,7 +69,7 @@ export default function SettingsPage() {
               <label className="field-group">
                 <span>Unidades</span>
                 <select name="units" value={settings.units} onChange={handleSelectChange}>
-                  <option value="metric">Metricas</option>
+                  <option value="metric">Métricas</option>
                   <option value="imperial">Imperiales</option>
                 </select>
               </label>
