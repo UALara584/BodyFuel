@@ -50,6 +50,30 @@ def get_plan(user_id: int, week_start: str, db: Session = Depends(get_db)):
     return plan
 
 
+@router.get("/user/{user_id}/full", response_model=list[WeeklyPlanFullResponse])
+def get_user_full_plans(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    return (
+        db.query(WeeklyPlan)
+        .options(
+            joinedload(WeeklyPlan.meals)
+            .joinedload(Meal.items)
+            .joinedload(MealItem.food),
+
+            joinedload(WeeklyPlan.meals)
+            .joinedload(Meal.items)
+            .joinedload(MealItem.recipe),
+        )
+        .filter(WeeklyPlan.user_id == user_id)
+        .order_by(WeeklyPlan.semana_inicio.asc())
+        .all()
+    )
+
+
 @router.get("/{user_id}/{week_start}/full", response_model=WeeklyPlanFullResponse)
 def get_full_plan(user_id: int, week_start: str, db: Session = Depends(get_db)):
     plan = (

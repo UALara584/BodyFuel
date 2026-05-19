@@ -717,6 +717,67 @@ a {
   align-content: start;
 }
 
+.food-card {
+  align-content: start;
+}
+
+.food-card-header {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.food-card-header h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.external-food-actions,
+.favorite-card-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+  flex-wrap: wrap;
+}
+
+.favorite-food-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.favorite-food-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.favorite-food-button:hover,
+.favorite-food-button-active {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.favorite-food-button:hover {
+  transform: translateY(-1px);
+}
+
 .external-food-top,
 .profile-summary-head,
 .nutrition-section-head,
@@ -728,6 +789,7 @@ a {
 }
 
 .api-badge,
+.bodyfuel-badge,
 .nutrition-badges span,
 .assistant-user-pill,
 .auth-chip {
@@ -743,6 +805,12 @@ a {
   color: var(--secondary);
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+.bodyfuel-badge {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--line));
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .auth-page {
@@ -1886,6 +1954,286 @@ a {
   accent-color: var(--primary);
 }
 
+.progress-main-column {
+  gap: 16px;
+}
+
+.progress-page-header {
+  align-items: center;
+}
+
+.progress-period-controls,
+.progress-period-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.progress-range-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(86px, 1fr));
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.progress-range-toggle button,
+.progress-period-stepper button {
+  min-height: 38px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.progress-range-toggle button.active {
+  border-color: color-mix(in srgb, var(--primary) 34%, var(--line));
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.progress-period-stepper {
+  min-height: 50px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.progress-period-stepper strong {
+  min-width: 150px;
+  color: var(--text);
+  text-align: center;
+}
+
+.progress-period-stepper button {
+  width: 38px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.progress-period-stepper button:not(:disabled):hover,
+.progress-range-toggle button:not(.active):hover {
+  border-color: color-mix(in srgb, var(--primary) 24%, var(--line));
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.progress-metrics-grid,
+.progress-insights,
+.progress-chart-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.progress-metrics-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.progress-insights {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.progress-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.progress-metric-card,
+.progress-insight,
+.progress-chart-panel {
+  min-width: 0;
+}
+
+.progress-metric-card,
+.progress-insight {
+  display: grid;
+  gap: 5px;
+}
+
+.progress-metric-card span,
+.progress-insight span,
+.progress-chart-head span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.progress-metric-card strong,
+.progress-insight strong {
+  color: var(--text);
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.progress-metric-card p,
+.progress-insight p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.progress-chart-panel {
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.progress-chart-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress-chart-head h3 {
+  margin: 0;
+}
+
+.progress-line-chart,
+.progress-bar-chart,
+.progress-macro-chart {
+  width: 100%;
+  min-height: 240px;
+  display: block;
+  overflow: visible;
+}
+
+.progress-chart-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.progress-chart-label {
+  fill: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.progress-weight-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.progress-trend-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 7 7;
+  stroke-linecap: round;
+}
+
+.progress-weight-point {
+  fill: var(--surface);
+  stroke: var(--primary);
+  stroke-width: 3;
+}
+
+.progress-target-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 5 6;
+}
+
+.progress-calorie-bar.actual {
+  fill: var(--secondary);
+}
+
+.progress-calorie-bar.planned {
+  fill: color-mix(in srgb, var(--secondary) 32%, var(--surface-strong));
+}
+
+.progress-empty-chart {
+  min-height: 240px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-card);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 650;
+}
+
+.progress-macro-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.progress-macro-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.macro-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.macro-dot.protein {
+  background: var(--primary);
+}
+
+.macro-dot.carbs {
+  background: var(--secondary);
+}
+
+.macro-dot.fats {
+  background: var(--accent);
+}
+
+.progress-adherence-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.progress-adherence-day {
+  aspect-ratio: 1;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.progress-adherence-day.done {
+  border-color: color-mix(in srgb, var(--success) 40%, var(--line));
+  background: color-mix(in srgb, var(--success) 16%, var(--surface));
+  color: var(--success);
+}
+
+.progress-adherence-day.future {
+  opacity: 0.42;
+}
+
 .assistant-page {
   gap: 18px;
 }
@@ -2249,6 +2597,11 @@ a {
     grid-template-columns: 1fr;
   }
 
+  .progress-metrics-grid,
+  .progress-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .plan-library,
   .profile-menu-panel {
     position: static;
@@ -2296,7 +2649,9 @@ a {
   .profile-summary-head,
   .nutrition-section-head,
   .assistant-header,
-  .assistant-hero {
+  .assistant-hero,
+  .progress-page-header,
+  .progress-chart-head {
     flex-direction: column;
     align-items: stretch;
   }
@@ -2318,8 +2673,26 @@ a {
   .profile-edit-side-panel .profile-form-grid,
   .weight-entry-form,
   .recipe-totals-box,
-  .recipe-detail-macros {
+  .recipe-detail-macros,
+  .progress-metrics-grid,
+  .progress-insights,
+  .progress-chart-grid {
     grid-template-columns: 1fr;
+  }
+
+  .progress-period-controls,
+  .progress-period-stepper {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .progress-period-stepper {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 38px;
+  }
+
+  .progress-period-stepper strong {
+    min-width: 0;
   }
 
   .weight-week-grid {

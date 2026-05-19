@@ -6,6 +6,7 @@ import PlanPage from "./pages/PlanPage";
 import ProfilePage from "./pages/ProfilePage";
 import FriendsPage from "./pages/FriendsPage";
 import SettingsPage from "./pages/SettingsPage";
+import ProgressPage from "./pages/ProgressPage";
 import AssistantPage from "./pages/AssistantPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -87,8 +88,10 @@ function NavLinkItem({ to, icon, children }) {
     "/profile/edit",
     "/friends",
     "/settings",
+    "/progress",
     "/profile/friends",
     "/profile/settings",
+    "/profile/progress",
   ].includes(location.pathname);
   const isActive = location.pathname === to || (to === "/profile" && isProfileArea);
 
@@ -122,8 +125,10 @@ function AppLayout() {
     "/profile/edit",
     "/friends",
     "/settings",
+    "/progress",
     "/profile/friends",
     "/profile/settings",
+    "/profile/progress",
   ].includes(location.pathname);
 
   useEffect(() => {
@@ -231,8 +236,10 @@ export default function App() {
           <Route path="/profile/edit" element={<ProfilePage mode="edit" />} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/progress" element={<ProgressPage />} />
           <Route path="/profile/friends" element={<FriendsPage />} />
           <Route path="/profile/settings" element={<SettingsPage />} />
+          <Route path="/profile/progress" element={<ProgressPage />} />
         </Route>
       </Route>
 

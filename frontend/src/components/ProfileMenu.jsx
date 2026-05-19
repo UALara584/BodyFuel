@@ -15,6 +15,12 @@ const profileMenuItems = [
     description: "Tema y preferencias",
   },
   {
+    to: "/progress",
+    activePaths: ["/progress", "/profile/progress"],
+    label: "Gráficas de progreso",
+    description: "Peso, calorías y macros",
+  },
+  {
     to: "/friends",
     activePaths: ["/friends", "/profile/friends"],
     label: "Amigos",

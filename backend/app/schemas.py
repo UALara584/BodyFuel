@@ -87,6 +87,15 @@ class FoodResponse(FoodCreate):
     class Config:
         from_attributes = True
 
+class RecipeIngredientResponse(BaseModel):
+    id: int
+    food_id: int
+    gramos: float
+
+    class Config:
+        from_attributes = True
+
+
 class RecipeCreate(BaseModel):
     nombre: str
     ingredientes: str
@@ -103,6 +112,7 @@ class RecipeCreate(BaseModel):
 
 class RecipeResponse(RecipeCreate):
     id: int
+    items: list[RecipeIngredientResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -240,6 +250,10 @@ class RecipeCreateWithItems(BaseModel):
     tipo_dieta: str | None = None
     user_id: int | None = None
     items: list[RecipeItemCreate]
+
+
+class RecipeCloneRequest(BaseModel):
+    user_id: int | None = None
 
 
 class FriendUser(BaseModel):

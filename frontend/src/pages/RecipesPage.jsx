@@ -1,10 +1,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  cloneRecipeToMyRecipes,
   createRecipeWithItems,
   deleteRecipe,
   fetchFoods,
   fetchRecipes,
+  updateRecipeWithItems,
 } from "../services/api";
 
 function emptyRecipeItem() {
@@ -12,6 +14,17 @@ function emptyRecipeItem() {
     food_id: "",
     gramos: "",
   };
+}
+
+function recipeItemsFromRecipe(recipe) {
+  if (!Array.isArray(recipe?.items) || recipe.items.length === 0) {
+    return [emptyRecipeItem()];
+  }
+
+  return recipe.items.map((item) => ({
+    food_id: item.food_id ? String(item.food_id) : "",
+    gramos: item.gramos ? String(item.gramos) : "",
+  }));
 }
 
 export default function RecipesPage() {
@@ -26,14 +39,17 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true);
   const [foodsLoading, setFoodsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [savingRecipe, setSavingRecipe] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [showRecipeDetail, setShowRecipeDetail] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState(null);
   const [deletingRecipe, setDeletingRecipe] = useState(false);
+  const [cloningRecipeId, setCloningRecipeId] = useState(null);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -118,9 +134,11 @@ export default function RecipesPage() {
     );
   }, [recipeItems, foods]);
 
-  function openModal() {
+  function openCreateModal() {
     setShowModal(true);
+    setEditingRecipe(null);
     setError("");
+    setSuccess("");
     setFormData({
       nombre: "",
       ingredientes: "",
@@ -130,9 +148,24 @@ export default function RecipesPage() {
     setRecipeItems([emptyRecipeItem()]);
   }
 
+  function openEditModal(recipe) {
+    setShowModal(true);
+    setEditingRecipe(recipe);
+    setError("");
+    setSuccess("");
+    setFormData({
+      nombre: recipe.nombre || "",
+      ingredientes: recipe.ingredientes || "",
+      tiempo_preparacion: recipe.tiempo_preparacion ? String(recipe.tiempo_preparacion) : "",
+      tipo_dieta: recipe.tipo_dieta || "",
+    });
+    setRecipeItems(recipeItemsFromRecipe(recipe));
+  }
+
   function closeModal() {
     setShowModal(false);
     setSavingRecipe(false);
+    setEditingRecipe(null);
   }
 
   function handleFormChange(event) {
@@ -164,9 +197,10 @@ export default function RecipesPage() {
     });
   }
 
-  async function handleCreateRecipe(event) {
+  async function handleSaveRecipe(event) {
     event.preventDefault();
     setError("");
+    setSuccess("");
 
     const validItems = recipeItems
       .map((item) => ({
@@ -187,23 +221,52 @@ export default function RecipesPage() {
 
     try {
       setSavingRecipe(true);
-
-      await createRecipeWithItems({
+      const payload = {
         nombre: formData.nombre.trim(),
         ingredientes: formData.ingredientes.trim() || "Receta creada desde alimentos",
         tiempo_preparacion: Number(formData.tiempo_preparacion || 0),
         tipo_dieta: formData.tipo_dieta.trim() || null,
         user_id: userId,
         items: validItems,
-      });
+      };
+      const wasEditing = Boolean(editingRecipe);
+
+      if (editingRecipe) {
+        await updateRecipeWithItems(editingRecipe.id, payload);
+      } else {
+        await createRecipeWithItems(payload);
+      }
 
       await loadRecipesAndFoods();
       closeModal();
       setActiveTab("manual");
+      setSuccess(wasEditing ? "Receta actualizada correctamente." : "Receta creada correctamente.");
     } catch (err) {
-      setError(err.message || "Error al crear receta");
+      setError(err.message || "Error al guardar receta");
     } finally {
       setSavingRecipe(false);
+    }
+  }
+
+  async function handleCloneRecipe(recipe) {
+    if (!recipe || !userId) {
+      setError("No hay usuario activo para guardar la receta.");
+      return;
+    }
+
+    try {
+      setCloningRecipeId(recipe.id);
+      setError("");
+      setSuccess("");
+      const clonedRecipe = await cloneRecipeToMyRecipes(recipe.id, userId);
+      await loadRecipesAndFoods();
+      closeRecipeDetail();
+      setActiveTab("manual");
+      setSuccess(`"${clonedRecipe.nombre}" añadida a Mis recetas.`);
+    } catch (err) {
+      setError(err.message || "Error al añadir receta a Mis recetas");
+    } finally {
+      setCloningRecipeId(null);
     }
   }
 
@@ -279,7 +342,7 @@ export default function RecipesPage() {
           <p>Crea tus recetas con alimentos reales y macros calculados automáticamente.</p>
         </div>
 
-        <button className="add-button" type="button" onClick={openModal} aria-label="Crear receta">
+        <button className="add-button" type="button" onClick={openCreateModal} aria-label="Crear receta">
           +
         </button>
       </div>
@@ -317,6 +380,7 @@ export default function RecipesPage() {
 
       {loading || foodsLoading ? <p>Cargando recetas...</p> : null}
       {error ? <p className="error-text">{error}</p> : null}
+      {success ? <p className="success-text">{success}</p> : null}
 
       {!loading && !foodsLoading && !error && activeTab === "manual" && (
         <section className="recipe-section">
@@ -343,13 +407,13 @@ export default function RecipesPage() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="modal-header">
-              <h3>Crear receta</h3>
+              <h3>{editingRecipe ? "Editar receta" : "Crear receta"}</h3>
               <button className="close-button" type="button" onClick={closeModal} aria-label="Cerrar modal">
                 ×
               </button>
             </div>
 
-            <form onSubmit={handleCreateRecipe} className="modal-form recipe-builder-form">
+            <form onSubmit={handleSaveRecipe} className="modal-form recipe-builder-form">
               <div className="field-group">
                 <label htmlFor="recipe_nombre">Título</label>
                 <input
@@ -474,7 +538,11 @@ export default function RecipesPage() {
               </div>
 
               <button type="submit" className="submit-button" disabled={savingRecipe}>
-                {savingRecipe ? "Guardando receta..." : "Guardar receta"}
+                {savingRecipe
+                  ? "Guardando receta..."
+                  : editingRecipe
+                    ? "Actualizar receta"
+                    : "Guardar receta"}
               </button>
             </form>
           </div>
@@ -561,15 +629,38 @@ export default function RecipesPage() {
                 Cerrar
               </button>
               {selectedRecipe && selectedRecipe.origen === "manual" && (
+                <>
+                  <button
+                    type="button"
+                    className="profile-edit-button"
+                    onClick={() => {
+                      const recipeForEdit = selectedRecipe;
+                      closeRecipeDetail();
+                      openEditModal(recipeForEdit);
+                    }}
+                  >
+                    Editar receta
+                  </button>
+                  <button
+                    type="button"
+                    className="delete-button"
+                    onClick={() => {
+                      closeRecipeDetail();
+                      openDeleteConfirm(selectedRecipe);
+                    }}
+                  >
+                    Eliminar receta
+                  </button>
+                </>
+              )}
+              {selectedRecipe && selectedRecipe.origen !== "manual" && (
                 <button
                   type="button"
-                  className="delete-button"
-                  onClick={() => {
-                    closeRecipeDetail();
-                    openDeleteConfirm(selectedRecipe);
-                  }}
+                  className="profile-edit-button"
+                  onClick={() => handleCloneRecipe(selectedRecipe)}
+                  disabled={cloningRecipeId === selectedRecipe.id}
                 >
-                  Eliminar receta
+                  {cloningRecipeId === selectedRecipe.id ? "Añadiendo..." : "Añadir a Mis recetas"}
                 </button>
               )}
             </div>

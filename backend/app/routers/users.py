@@ -2,11 +2,12 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import User
+from ..models import AssistantMessage, Food, Friendship, Meal, MealItem, Recipe, RecipeItem, Tracking, User, WeeklyPlan
 from ..schemas import AuthCredentials, UserCreate, UserDeleteConfirm, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -209,6 +210,34 @@ def delete_user_with_password(user_id: int, data: UserDeleteConfirm, db: Session
 
     if user.password != data.password:
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
+
+    recipe_ids = select(Recipe.id).where(Recipe.user_id == user_id)
+    food_ids = select(Food.id).where(Food.user_id == user_id)
+    plan_ids = select(WeeklyPlan.id).where(WeeklyPlan.user_id == user_id)
+    meal_ids = select(Meal.id).where(Meal.weekly_plan_id.in_(plan_ids))
+
+    db.query(MealItem).filter(
+        or_(
+            MealItem.meal_id.in_(meal_ids),
+            MealItem.recipe_id.in_(recipe_ids),
+            MealItem.food_id.in_(food_ids),
+        )
+    ).delete(synchronize_session=False)
+    db.query(RecipeItem).filter(
+        or_(
+            RecipeItem.recipe_id.in_(recipe_ids),
+            RecipeItem.food_id.in_(food_ids),
+        )
+    ).delete(synchronize_session=False)
+    db.query(Meal).filter(Meal.weekly_plan_id.in_(plan_ids)).delete(synchronize_session=False)
+    db.query(WeeklyPlan).filter(WeeklyPlan.user_id == user_id).delete(synchronize_session=False)
+    db.query(Recipe).filter(Recipe.user_id == user_id).delete(synchronize_session=False)
+    db.query(Food).filter(Food.user_id == user_id).delete(synchronize_session=False)
+    db.query(Tracking).filter(Tracking.user_id == user_id).delete(synchronize_session=False)
+    db.query(AssistantMessage).filter(AssistantMessage.user_id == user_id).delete(synchronize_session=False)
+    db.query(Friendship).filter(
+        or_(Friendship.requester_id == user_id, Friendship.addressee_id == user_id)
+    ).delete(synchronize_session=False)
 
     db.delete(user)
     db.commit()

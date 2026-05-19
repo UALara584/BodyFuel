@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createFood,
   fetchExternalFoods,
@@ -6,12 +6,84 @@ import {
   importFoodFromApi,
 } from "../services/api";
 
+const FOOD_FAVORITES_STORAGE_PREFIX = "bf_food_favorites";
+
+function getFavoritesStorageKey(userId) {
+  return `${FOOD_FAVORITES_STORAGE_PREFIX}_${userId ?? "guest"}`;
+}
+
+function readFavoriteFoods(storageKey) {
+  try {
+    const storedFavorites = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    return Array.isArray(storedFavorites) ? storedFavorites : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeFoodName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase();
+}
+
+function getFoodFavoriteKey(food, sourceType) {
+  if (food.favoriteKey) {
+    return food.favoriteKey;
+  }
+
+  if (sourceType === "local" && food.id !== undefined && food.id !== null) {
+    return `local:${food.id}`;
+  }
+
+  if (sourceType === "api" && food.food_id) {
+    return `api:${food.food_id}`;
+  }
+
+  return `${sourceType}:${normalizeFoodName(food.nombre)}`;
+}
+
+function normalizeFavoriteFood(food, sourceType) {
+  return {
+    favoriteKey: getFoodFavoriteKey(food, sourceType),
+    sourceType,
+    id: food.id ?? null,
+    food_id: food.food_id ?? null,
+    nombre: food.nombre || "Alimento sin nombre",
+    calorias: Number(food.calorias || 0),
+    proteinas: Number(food.proteinas || 0),
+    carbos: Number(food.carbos || 0),
+    grasas: Number(food.grasas || 0),
+    category: food.category || "",
+    fuente: food.fuente || (sourceType === "api" ? "api" : "manual"),
+  };
+}
+
+function FavoriteIcon({ filled }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="m12 3.8 2.5 5.1 5.6.8-4 3.9.9 5.5-5-2.6-5 2.6.9-5.5-4-3.9 5.6-.8z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
 export default function FoodsPage() {
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id ?? null;
+  const favoritesStorageKey = getFavoritesStorageKey(userId);
 
   const [foods, setFoods] = useState([]);
   const [externalFoods, setExternalFoods] = useState([]);
+  const [favoriteFoods, setFavoriteFoods] = useState(() =>
+    readFavoriteFoods(favoritesStorageKey)
+  );
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [externalLoading, setExternalLoading] = useState(false);
@@ -67,9 +139,86 @@ export default function FoodsPage() {
     loadFoodsAndApi();
   }, [userId]);
 
+  const favoriteKeys = useMemo(
+    () => new Set(favoriteFoods.map((food) => food.favoriteKey)),
+    [favoriteFoods]
+  );
+
+  const filteredFavoriteFoods = useMemo(() => {
+    const query = normalizeFoodName(search);
+
+    if (!query) {
+      return favoriteFoods;
+    }
+
+    return favoriteFoods.filter((food) =>
+      normalizeFoodName(food.nombre).includes(query)
+    );
+  }, [favoriteFoods, search]);
+
   function handleSearchSubmit(event) {
     event.preventDefault();
     loadFoodsAndApi(search);
+  }
+
+  function updateFavoriteFoods(updater) {
+    setFavoriteFoods((prevFavorites) => {
+      const nextFavorites = updater(prevFavorites);
+      localStorage.setItem(favoritesStorageKey, JSON.stringify(nextFavorites));
+      return nextFavorites;
+    });
+  }
+
+  function isFavoriteFood(food, sourceType) {
+    return favoriteKeys.has(getFoodFavoriteKey(food, sourceType));
+  }
+
+  function handleToggleFavorite(food, sourceType) {
+    const favoriteKey = getFoodFavoriteKey(food, sourceType);
+
+    updateFavoriteFoods((prevFavorites) => {
+      const alreadyFavorite = prevFavorites.some(
+        (favorite) => favorite.favoriteKey === favoriteKey
+      );
+
+      if (alreadyFavorite) {
+        return prevFavorites.filter(
+          (favorite) => favorite.favoriteKey !== favoriteKey
+        );
+      }
+
+      return [normalizeFavoriteFood(food, sourceType), ...prevFavorites];
+    });
+  }
+
+  function renderFavoriteButton(food, sourceType) {
+    const favorite = isFavoriteFood(food, sourceType);
+    const label = favorite
+      ? `Quitar ${food.nombre} de favoritos`
+      : `A\u00f1adir ${food.nombre} a favoritos`;
+
+    return (
+      <button
+        type="button"
+        className={`favorite-food-button ${favorite ? "favorite-food-button-active" : ""}`}
+        onClick={() => handleToggleFavorite(food, sourceType)}
+        aria-label={label}
+        title={label}
+      >
+        <FavoriteIcon filled={favorite} />
+      </button>
+    );
+  }
+
+  function renderFoodMacros(food) {
+    return (
+      <>
+        <p><strong>{"Calor\u00edas:"}</strong> {Number(food.calorias || 0).toFixed(1)}</p>
+        <p><strong>{"Prote\u00ednas:"}</strong> {Number(food.proteinas || 0).toFixed(1)} g</p>
+        <p><strong>Carbos:</strong> {Number(food.carbos || 0).toFixed(1)} g</p>
+        <p><strong>Grasas:</strong> {Number(food.grasas || 0).toFixed(1)} g</p>
+      </>
+    );
   }
 
   async function handleImportFood(food) {
@@ -187,6 +336,15 @@ export default function FoodsPage() {
           API externa
           <span className="foods-tab-count">{externalFoods.length}</span>
         </button>
+
+        <button
+          type="button"
+          className={`foods-tab ${activeTab === "favorites" ? "active" : ""}`}
+          onClick={() => setActiveTab("favorites")}
+        >
+          Mis favoritos
+          <span className="foods-tab-count">{favoriteFoods.length}</span>
+        </button>
       </div>
 
       {activeTab === "local" && (
@@ -202,12 +360,12 @@ export default function FoodsPage() {
                 </div>
               ) : (
                 foods.map((food) => (
-                  <div key={food.id} className="card">
-                    <h3>{food.nombre}</h3>
-                    <p><strong>Calorías:</strong> {food.calorias}</p>
-                    <p><strong>Proteínas:</strong> {food.proteinas} g</p>
-                    <p><strong>Carbos:</strong> {food.carbos} g</p>
-                    <p><strong>Grasas:</strong> {food.grasas} g</p>
+                  <div key={food.id} className="card food-card">
+                    <div className="food-card-header">
+                      <h3>{food.nombre}</h3>
+                      {renderFavoriteButton(food, "local")}
+                    </div>
+                    {renderFoodMacros(food)}
                   </div>
                 ))
               )}
@@ -240,13 +398,13 @@ export default function FoodsPage() {
                           {food.category || "Sin categoría"}
                         </p>
                       </div>
-                      <span className="api-badge">API</span>
+                      <div className="external-food-actions">
+                        <span className="api-badge">API</span>
+                        {renderFavoriteButton(food, "api")}
+                      </div>
                     </div>
 
-                    <p><strong>Calorías:</strong> {Number(food.calorias || 0).toFixed(1)}</p>
-                    <p><strong>Proteínas:</strong> {Number(food.proteinas || 0).toFixed(1)} g</p>
-                    <p><strong>Carbos:</strong> {Number(food.carbos || 0).toFixed(1)} g</p>
-                    <p><strong>Grasas:</strong> {Number(food.grasas || 0).toFixed(1)} g</p>
+                    {renderFoodMacros(food)}
 
                     <button
                       type="button"
@@ -263,6 +421,46 @@ export default function FoodsPage() {
               )}
             </div>
           )}
+        </section>
+      )}
+
+      {activeTab === "favorites" && (
+        <section className="foods-results-section">
+          <div className="grid-cards">
+            {favoriteFoods.length === 0 ? (
+              <div className="card">
+                <p>{"Todav\u00eda no tienes alimentos favoritos."}</p>
+              </div>
+            ) : filteredFavoriteFoods.length === 0 ? (
+              <div className="card">
+                <p>{"No hay favoritos con esa b\u00fasqueda."}</p>
+              </div>
+            ) : (
+              filteredFavoriteFoods.map((food) => {
+                const sourceType = food.sourceType || "local";
+
+                return (
+                  <div key={food.favoriteKey} className="card food-card">
+                    <div className="food-card-header">
+                      <div>
+                        <h3>{food.nombre}</h3>
+                        {food.category ? (
+                          <p className="item-note">{food.category}</p>
+                        ) : null}
+                      </div>
+                      <div className="favorite-card-actions">
+                        <span className={sourceType === "api" ? "api-badge" : "bodyfuel-badge"}>
+                          {sourceType === "api" ? "API" : "BodyFuel"}
+                        </span>
+                        {renderFavoriteButton(food, sourceType)}
+                      </div>
+                    </div>
+                    {renderFoodMacros(food)}
+                  </div>
+                );
+              })
+            )}
+          </div>
         </section>
       )}
 

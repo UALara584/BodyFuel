@@ -67,6 +67,11 @@ export async function fetchFullPlan(userId, weekStart) {
   return handleResponse(response, "Error al obtener el plan semanal");
 }
 
+export async function fetchFullPlansByUser(userId) {
+  const response = await fetch(`${API_BASE_URL}/plans/user/${userId}/full`);
+  return handleResponse(response, "Error al obtener planes completos");
+}
+
 export async function createPlan(planData) {
   const response = await fetch(`${API_BASE_URL}/plans/`, {
     method: "POST",
@@ -344,6 +349,30 @@ export async function createRecipeWithItems(recipeData) {
   });
 
   return handleResponse(response, "Error al crear receta con alimentos");
+}
+
+export async function updateRecipeWithItems(recipeId, recipeData) {
+  const response = await fetch(`${API_BASE_URL}/recipes/${recipeId}/with-items`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(recipeData),
+  });
+
+  return handleResponse(response, "Error al actualizar receta");
+}
+
+export async function cloneRecipeToMyRecipes(recipeId, userId) {
+  const response = await fetch(`${API_BASE_URL}/recipes/${recipeId}/clone`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ user_id: userId ?? null }),
+  });
+
+  return handleResponse(response, "Error al añadir receta a Mis recetas");
 }
 
 export async function fetchFriends(userId) {
