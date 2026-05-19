@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   createMeal,
   createMealItem,
@@ -8,6 +9,7 @@ import {
   fetchFullPlan,
   fetchRecipes,
 } from "../services/api";
+import { fetchChatConversations, sendChatMessage } from "../services/chatApi";
 import { exportPlanToPDF } from "../utils/pdfExport";
 
 const DAYS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
@@ -48,6 +50,7 @@ function truncateScrapingRecipeName(name, maxLength = 28) {
 }
 
 export default function PlanPage() {
+  const location = useLocation();
   const [plan, setPlan] = useState(null);
   const [foods, setFoods] = useState([]);
   const [recipes, setRecipes] = useState([]);
@@ -63,10 +66,17 @@ export default function PlanPage() {
   const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState("");
+  const [shareConversations, setShareConversations] = useState([]);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState("");
+  const [shareSuccess, setShareSuccess] = useState("");
+  const [sharingConversationId, setSharingConversationId] = useState(null);
+  const [showSharePlan, setShowSharePlan] = useState(false);
 
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id;
-  const weekStart = getCurrentWeekMonday();
+  const weekFromQuery = new URLSearchParams(location.search).get("week");
+  const weekStart = weekFromQuery || getCurrentWeekMonday();
 
   async function loadPlanAndLibrary() {
     setLoading(true);
@@ -113,7 +123,7 @@ export default function PlanPage() {
     }
 
     loadPlanAndLibrary();
-  }, [userId]);
+  }, [userId, weekStart]);
 
   const manualRecipes = useMemo(
     () => recipes.filter((recipe) => (recipe.origen || "").toLowerCase() === "manual"),
@@ -224,6 +234,50 @@ export default function PlanPage() {
     }
   }
 
+  async function openSharePlanModal() {
+    setShowSharePlan(true);
+    setShareError("");
+    setShareSuccess("");
+    setShareConversations([]);
+
+    try {
+      setShareLoading(true);
+      const conversations = await fetchChatConversations(userId);
+      setShareConversations(conversations || []);
+    } catch (err) {
+      setShareError(err.message || "No se pudieron cargar tus chats.");
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  function closeSharePlanModal() {
+    setShowSharePlan(false);
+    setShareError("");
+    setSharingConversationId(null);
+  }
+
+  async function handleSharePlan(conversation) {
+    if (!plan) return;
+
+    try {
+      setShareError("");
+      setShareSuccess("");
+      setSharingConversationId(conversation.id);
+      await sendChatMessage(conversation.id, {
+        user_id: userId,
+        message_type: "weekly_plan_share",
+        weekly_plan_id: plan.id,
+      });
+      setShareSuccess(`Plan semanal compartido con ${conversation.other_user.nombre}.`);
+      closeSharePlanModal();
+    } catch (err) {
+      setShareError(err.message || "No se pudo compartir el plan semanal.");
+    } finally {
+      setSharingConversationId(null);
+    }
+  }
+
   if (loading) {
     return <p>Cargando plan semanal...</p>;
   }
@@ -235,18 +289,29 @@ export default function PlanPage() {
           <h2>Plan semanal</h2>
           <p>Arrastra alimentos o recetas al día y hora exacta que quieras.</p>
         </div>
-        <button
-          type="button"
-          className="profile-edit-button"
-          onClick={handleExportPDF}
-          disabled={exportLoading || !plan}
-        >
-          {exportLoading ? "Generando..." : "Exportar PDF"}
-        </button>
+        <div className="plan-header-actions">
+          <button
+            type="button"
+            className="secondary-action-button"
+            onClick={openSharePlanModal}
+            disabled={!plan}
+          >
+            Compartir plan
+          </button>
+          <button
+            type="button"
+            className="profile-edit-button"
+            onClick={handleExportPDF}
+            disabled={exportLoading || !plan}
+          >
+            {exportLoading ? "Generando..." : "Exportar PDF"}
+          </button>
+        </div>
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
       {exportError ? <p className="error-text">{exportError}</p> : null}
+      {shareSuccess ? <p className="success-text">{shareSuccess}</p> : null}
 
       <section className="plan-board">
         <aside className="card plan-library">
@@ -443,6 +508,58 @@ export default function PlanPage() {
       </section>
 
       {dropping ? <p>Guardando en el plan...</p> : null}
+
+      {showSharePlan && (
+        <div className="modal-overlay" onClick={closeSharePlanModal}>
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Compartir plan semanal</h3>
+              <button
+                className="close-button"
+                type="button"
+                onClick={closeSharePlanModal}
+                aria-label="Cerrar selector de chats"
+              >
+                x
+              </button>
+            </div>
+
+            {shareLoading ? <p>Cargando chats...</p> : null}
+            {shareError ? <p className="error-text">{shareError}</p> : null}
+
+            <div className="chat-picker-list">
+              {!shareLoading && shareConversations.length === 0 ? (
+                <p className="item-note">No tienes conversaciones. Crea una desde Chats.</p>
+              ) : null}
+
+              {shareConversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  className="chat-picker-item"
+                  onClick={() => handleSharePlan(conversation)}
+                  disabled={sharingConversationId === conversation.id}
+                >
+                  <span className="chat-avatar">
+                    {(conversation.other_user.nombre || "U").slice(0, 2).toUpperCase()}
+                  </span>
+                  <span>
+                    <strong>{conversation.other_user.nombre}</strong>
+                    <small>
+                      {sharingConversationId === conversation.id
+                        ? "Compartiendo..."
+                        : `Semana ${weekStart}`}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

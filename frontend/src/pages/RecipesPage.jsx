@@ -8,6 +8,7 @@ import {
   fetchRecipes,
   updateRecipeWithItems,
 } from "../services/api";
+import { fetchChatConversations, sendChatMessage } from "../services/chatApi";
 
 function emptyRecipeItem() {
   return {
@@ -50,6 +51,11 @@ export default function RecipesPage() {
   const [recipeToDelete, setRecipeToDelete] = useState(null);
   const [deletingRecipe, setDeletingRecipe] = useState(false);
   const [cloningRecipeId, setCloningRecipeId] = useState(null);
+  const [shareRecipe, setShareRecipe] = useState(null);
+  const [shareConversations, setShareConversations] = useState([]);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareError, setShareError] = useState("");
+  const [sharingConversationId, setSharingConversationId] = useState(null);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -283,6 +289,49 @@ export default function RecipesPage() {
   function openDeleteConfirm(recipe) {
     setRecipeToDelete(recipe);
     setShowDeleteConfirm(true);
+  }
+
+  async function openShareRecipeModal(recipe) {
+    setShareRecipe(recipe);
+    setShareError("");
+    setShareConversations([]);
+
+    try {
+      setShareLoading(true);
+      const conversations = await fetchChatConversations(userId);
+      setShareConversations(conversations || []);
+    } catch (err) {
+      setShareError(err.message || "No se pudieron cargar tus chats.");
+    } finally {
+      setShareLoading(false);
+    }
+  }
+
+  function closeShareRecipeModal() {
+    setShareRecipe(null);
+    setShareConversations([]);
+    setShareError("");
+    setSharingConversationId(null);
+  }
+
+  async function handleShareRecipe(conversation) {
+    if (!shareRecipe) return;
+
+    try {
+      setShareError("");
+      setSharingConversationId(conversation.id);
+      await sendChatMessage(conversation.id, {
+        user_id: userId,
+        message_type: "recipe_share",
+        recipe_id: shareRecipe.id,
+      });
+      setSuccess(`"${shareRecipe.nombre}" compartida con ${conversation.other_user.nombre}.`);
+      closeShareRecipeModal();
+    } catch (err) {
+      setShareError(err.message || "No se pudo compartir la receta.");
+    } finally {
+      setSharingConversationId(null);
+    }
   }
 
   function closeDeleteConfirm() {
@@ -628,6 +677,13 @@ export default function RecipesPage() {
               >
                 Cerrar
               </button>
+              <button
+                type="button"
+                className="secondary-action-button"
+                onClick={() => openShareRecipeModal(selectedRecipe)}
+              >
+                Compartir receta
+              </button>
               {selectedRecipe && selectedRecipe.origen === "manual" && (
                 <>
                   <button
@@ -663,6 +719,58 @@ export default function RecipesPage() {
                   {cloningRecipeId === selectedRecipe.id ? "Añadiendo..." : "Añadir a Mis recetas"}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {shareRecipe && (
+        <div className="modal-overlay" onClick={closeShareRecipeModal}>
+          <div
+            className="modal-card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Compartir receta</h3>
+              <button
+                className="close-button"
+                type="button"
+                onClick={closeShareRecipeModal}
+                aria-label="Cerrar selector de chats"
+              >
+                x
+              </button>
+            </div>
+
+            {shareLoading ? <p>Cargando chats...</p> : null}
+            {shareError ? <p className="error-text">{shareError}</p> : null}
+
+            <div className="chat-picker-list">
+              {!shareLoading && shareConversations.length === 0 ? (
+                <p className="item-note">No tienes conversaciones. Crea una desde Chats.</p>
+              ) : null}
+
+              {shareConversations.map((conversation) => (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  className="chat-picker-item"
+                  onClick={() => handleShareRecipe(conversation)}
+                  disabled={sharingConversationId === conversation.id}
+                >
+                  <span className="chat-avatar">
+                    {(conversation.other_user.nombre || "U").slice(0, 2).toUpperCase()}
+                  </span>
+                  <span>
+                    <strong>{conversation.other_user.nombre}</strong>
+                    <small>
+                      {sharingConversationId === conversation.id
+                        ? "Compartiendo..."
+                        : shareRecipe.nombre}
+                    </small>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

@@ -8,10 +8,12 @@ import FriendsPage from "./pages/FriendsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ProgressPage from "./pages/ProgressPage";
 import AssistantPage from "./pages/AssistantPage";
+import ChatsPage from "./pages/ChatsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import { useEffect, useState } from "react";
 import { fetchUserById } from "./services/api";
+import { fetchChatConversations } from "./services/chatApi";
 
 function NavIcon({ name }) {
   const icons = {
@@ -39,6 +41,13 @@ function NavIcon({ name }) {
         <path d="M8.7 11.4h.1" />
         <path d="M15.2 11.4h.1" />
         <path d="M9.4 15.1h5.2" />
+      </>
+    ),
+    chats: (
+      <>
+        <path d="M4.6 6.2h14.8a2.4 2.4 0 0 1 2.4 2.4v6.8a2.4 2.4 0 0 1-2.4 2.4H10l-5.4 3v-3.1a2.4 2.4 0 0 1-2.4-2.4V8.6a2.4 2.4 0 0 1 2.4-2.4z" />
+        <path d="M7.6 10.7h8.8" />
+        <path d="M7.6 14h5.4" />
       </>
     ),
     plan: (
@@ -81,7 +90,7 @@ function BrandMark() {
   );
 }
 
-function NavLinkItem({ to, icon, children }) {
+function NavLinkItem({ to, icon, children, badgeCount = 0 }) {
   const location = useLocation();
   const isProfileArea = [
     "/profile",
@@ -93,12 +102,19 @@ function NavLinkItem({ to, icon, children }) {
     "/profile/settings",
     "/profile/progress",
   ].includes(location.pathname);
-  const isActive = location.pathname === to || (to === "/profile" && isProfileArea);
+  const isChatArea = to === "/chats" && location.pathname.startsWith("/chats");
+  const isActive = location.pathname === to || (to === "/profile" && isProfileArea) || isChatArea;
+  const visibleBadge = Number(badgeCount || 0);
 
   return (
     <Link to={to} className={`nav-link ${isActive ? "active" : ""}`}>
       <NavIcon name={icon} />
-      <span className="nav-label">{children}</span>
+      <span className="nav-label-wrap">
+        <span className="nav-label">{children}</span>
+        {visibleBadge > 0 ? (
+          <span className="nav-badge">{visibleBadge > 99 ? "99+" : visibleBadge}</span>
+        ) : null}
+      </span>
     </Link>
   );
 }
@@ -119,6 +135,7 @@ function AppLayout() {
   const [currentUser, setCurrentUser] = useState(() =>
     JSON.parse(localStorage.getItem("bf_current_user") || "null")
   );
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const userName = currentUser?.nombre || "Usuario";
   const isProfileArea = [
     "/profile",
@@ -171,6 +188,42 @@ function AppLayout() {
     };
   }, [currentUser?.id]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function refreshChatUnreadCount() {
+      if (!currentUser?.id) {
+        setChatUnreadCount(0);
+        return;
+      }
+
+      try {
+        const conversations = await fetchChatConversations(currentUser.id);
+        if (cancelled) return;
+
+        const totalUnread = (conversations || []).reduce(
+          (total, conversation) => total + Number(conversation.unread_count || 0),
+          0
+        );
+        setChatUnreadCount(totalUnread);
+      } catch {
+        if (!cancelled) {
+          setChatUnreadCount(0);
+        }
+      }
+    }
+
+    refreshChatUnreadCount();
+    window.addEventListener("bf:chats-updated", refreshChatUnreadCount);
+    const intervalId = window.setInterval(refreshChatUnreadCount, 30000);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("bf:chats-updated", refreshChatUnreadCount);
+      window.clearInterval(intervalId);
+    };
+  }, [currentUser?.id, location.pathname]);
+
   function handleLogout() {
     localStorage.removeItem("bf_current_user");
     setCurrentUser(null);
@@ -211,6 +264,7 @@ function AppLayout() {
         <NavLinkItem to="/home" icon="home">Inicio</NavLinkItem>
         <NavLinkItem to="/foods" icon="foods">Alimentos</NavLinkItem>
         <NavLinkItem to="/recipes" icon="recipes">Recetas</NavLinkItem>
+        <NavLinkItem to="/chats" icon="chats" badgeCount={chatUnreadCount}>Chats</NavLinkItem>
         <NavLinkItem to="/assistant" icon="assistant">Asistente IA</NavLinkItem>
         <NavLinkItem to="/plan" icon="plan">Plan semanal</NavLinkItem>
         <NavLinkItem to="/profile" icon="profile">Mi perfil</NavLinkItem>
@@ -230,6 +284,8 @@ export default function App() {
           <Route path="/home" element={<HomePage />} />
           <Route path="/foods" element={<FoodsPage />} />
           <Route path="/recipes" element={<RecipesPage />} />
+          <Route path="/chats" element={<ChatsPage />} />
+          <Route path="/chats/:conversationId" element={<ChatsPage />} />
           <Route path="/assistant" element={<AssistantPage />} />
           <Route path="/plan" element={<PlanPage />} />
           <Route path="/profile" element={<ProfilePage />} />

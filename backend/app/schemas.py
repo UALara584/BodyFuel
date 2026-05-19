@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from datetime import date
+from datetime import date, datetime
 
 
 class UserCreate(BaseModel):
@@ -284,3 +284,64 @@ class FriendshipListResponse(BaseModel):
     friends: list[FriendUser]
     incoming: list[FriendInvitationItem]
     outgoing: list[FriendInvitationItem]
+
+
+class ChatConversationCreate(BaseModel):
+    user_id: int
+    other_user_id: int
+
+
+class ChatRecipeShare(BaseModel):
+    id: int
+    nombre: str
+    imagen_url: str | None = None
+    tiempo_preparacion: int | None = None
+    calorias_totales: float | None = None
+    proteinas: float | None = None
+    carbos: float | None = None
+    grasas: float | None = None
+    fuente_url: str | None = None
+
+
+class ChatWeeklyPlanShare(BaseModel):
+    id: int
+    nombre: str
+    semana_inicio: date
+    semana_fin: date
+    meal_count: int
+    recipe_count: int
+    food_count: int
+
+
+class ChatMessageCreate(BaseModel):
+    user_id: int
+    content: str | None = None
+    message_type: str = "text"
+    recipe_id: int | None = None
+    weekly_plan_id: int | None = None
+
+
+class ChatMessageResponse(BaseModel):
+    id: int
+    conversation_id: int
+    sender: FriendUser
+    message_type: str
+    content: str | None = None
+    recipe: ChatRecipeShare | None = None
+    weekly_plan: ChatWeeklyPlanShare | None = None
+    created_at: datetime
+    read_at: datetime | None = None
+
+
+class ChatConversationResponse(BaseModel):
+    id: int
+    other_user: FriendUser
+    last_message: ChatMessageResponse | None = None
+    last_message_at: datetime | None = None
+    unread_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatReadRequest(BaseModel):
+    user_id: int

@@ -18,6 +18,7 @@ from .routers.meals import router as meals_router
 from .routers.meal_items import router as meal_items_router
 from .routers.external_foods import router as external_foods_router
 from .routers.friends import router as friends_router
+from .routers.chats import router as chats_router
 
 app = FastAPI()
 
@@ -389,6 +390,7 @@ app.include_router(meals_router)
 app.include_router(meal_items_router)
 app.include_router(external_foods_router)
 app.include_router(friends_router)
+app.include_router(chats_router)
 
 @app.get("/health")
 def health():

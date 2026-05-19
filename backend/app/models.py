@@ -40,6 +40,8 @@ class User(Base):
         back_populates="addressee",
         cascade=CASCADE_DELETE,
     )
+    chat_participants = relationship("ChatParticipant", back_populates="user", cascade=CASCADE_DELETE)
+    chat_messages = relationship("ChatMessage", back_populates="sender", cascade=CASCADE_DELETE)
 
 class Tracking(Base):
     __tablename__ = "tracking"
@@ -164,3 +166,52 @@ class Friendship(Base):
 
     requester = relationship("User", foreign_keys=[requester_id], back_populates="sent_friendships")
     addressee = relationship("User", foreign_keys=[addressee_id], back_populates="received_friendships")
+
+
+class ChatConversation(Base):
+    __tablename__ = "chat_conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_key = Column(String, nullable=False, unique=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False, index=True
+    )
+
+    participants = relationship("ChatParticipant", back_populates="conversation", cascade=CASCADE_DELETE)
+    messages = relationship("ChatMessage", back_populates="conversation", cascade=CASCADE_DELETE)
+
+
+class ChatParticipant(Base):
+    __tablename__ = "chat_participants"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "user_id", name="uq_chat_participant_user"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("chat_conversations.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey(USER_FK), nullable=False, index=True)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_read_at = Column(DateTime(timezone=True), nullable=True)
+
+    conversation = relationship("ChatConversation", back_populates="participants")
+    user = relationship("User", back_populates="chat_participants")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("chat_conversations.id"), nullable=False, index=True)
+    sender_id = Column(Integer, ForeignKey(USER_FK), nullable=False, index=True)
+    message_type = Column(String, nullable=False, default="text", index=True)
+    content = Column(Text, nullable=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=True)
+    weekly_plan_id = Column(Integer, ForeignKey("weekly_plans.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+
+    conversation = relationship("ChatConversation", back_populates="messages")
+    sender = relationship("User", back_populates="chat_messages")
+    recipe = relationship("Recipe")
+    weekly_plan = relationship("WeeklyPlan")

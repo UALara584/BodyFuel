@@ -7,7 +7,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..models import AssistantMessage, Food, Friendship, Meal, MealItem, Recipe, RecipeItem, Tracking, User, WeeklyPlan
+from ..models import (
+    AssistantMessage,
+    ChatConversation,
+    ChatMessage,
+    ChatParticipant,
+    Food,
+    Friendship,
+    Meal,
+    MealItem,
+    Recipe,
+    RecipeItem,
+    Tracking,
+    User,
+    WeeklyPlan,
+)
 from ..schemas import AuthCredentials, UserCreate, UserDeleteConfirm, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -235,6 +249,22 @@ def delete_user_with_password(user_id: int, data: UserDeleteConfirm, db: Session
     db.query(Food).filter(Food.user_id == user_id).delete(synchronize_session=False)
     db.query(Tracking).filter(Tracking.user_id == user_id).delete(synchronize_session=False)
     db.query(AssistantMessage).filter(AssistantMessage.user_id == user_id).delete(synchronize_session=False)
+    chat_conversation_ids = [
+        row[0]
+        for row in db.query(ChatParticipant.conversation_id)
+        .filter(ChatParticipant.user_id == user_id)
+        .all()
+    ]
+    if chat_conversation_ids:
+        db.query(ChatMessage).filter(ChatMessage.conversation_id.in_(chat_conversation_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(ChatParticipant).filter(ChatParticipant.conversation_id.in_(chat_conversation_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(ChatConversation).filter(ChatConversation.id.in_(chat_conversation_ids)).delete(
+            synchronize_session=False
+        )
     db.query(Friendship).filter(
         or_(Friendship.requester_id == user_id, Friendship.addressee_id == user_id)
     ).delete(synchronize_session=False)
