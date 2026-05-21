@@ -48,6 +48,19 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function readStoredCompliance(storageKey) {
+  if (!storageKey) return {};
+
+  try {
+    const raw = localStorage.getItem(storageKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (err) {
+    console.error("Error loading compliance data:", err);
+    return {};
+  }
+}
+
 function StreakIcon() {
   return (
     <svg className="streak-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -77,7 +90,14 @@ export default function HomePage() {
 
   const [trackingEntries, setTrackingEntries] = useState([]);
   const [weeklyPlan, setWeeklyPlan] = useState(null);
-  const [complianceByDate, setComplianceByDate] = useState({});
+  const [complianceVersion, setComplianceVersion] = useState(0);
+  const complianceByDate = useMemo(
+    () => {
+      void complianceVersion;
+      return readStoredCompliance(complianceStorageKey);
+    },
+    [complianceStorageKey, complianceVersion]
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showWeightCalendar, setShowWeightCalendar] = useState(false);
@@ -87,39 +107,20 @@ export default function HomePage() {
   const [weightError, setWeightError] = useState("");
   const [weightSuccess, setWeightSuccess] = useState("");
 
-  // Load compliance data from localStorage on mount
   useEffect(() => {
-    if (!complianceStorageKey) {
-      setComplianceByDate({});
-      return;
-    }
-    try {
-      const raw = localStorage.getItem(complianceStorageKey);
-      const parsed = raw ? JSON.parse(raw) : {};
-      if (parsed && typeof parsed === "object") {
-        setComplianceByDate(parsed);
-      }
-    } catch (err) {
-      console.error("Error loading compliance data:", err);
-      setComplianceByDate({});
-    }
-  }, [complianceStorageKey]);
+    let cancelled = false;
 
-  // Save compliance data to localStorage whenever it changes
-  useEffect(() => {
-    if (!complianceStorageKey) return;
-    try {
-      localStorage.setItem(complianceStorageKey, JSON.stringify(complianceByDate));
-    } catch (err) {
-      console.error("Error saving compliance data:", err);
-    }
-  }, [complianceStorageKey, complianceByDate]);
-
-  useEffect(() => {
     if (!userId) {
-      setLoading(false);
-      setError("No hay usuario activo.");
-      return;
+      const timerId = window.setTimeout(() => {
+        if (cancelled) return;
+        setLoading(false);
+        setError("No hay usuario activo.");
+      }, 0);
+
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timerId);
+      };
     }
 
     async function loadStats() {
@@ -130,23 +131,35 @@ export default function HomePage() {
           fetchTrackingByUser(userId),
           fetchFullPlan(userId, weekStart).catch(() => null),
         ]);
+        if (cancelled) return;
         setTrackingEntries(trackingData);
         setWeeklyPlan(planData);
       } catch (err) {
+        if (cancelled) return;
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     loadStats();
+
+    return () => {
+      cancelled = true;
+    };
   }, [userId, weekStart]);
 
   useEffect(() => {
-    const entryForDate = trackingEntries.find((entry) => entry.fecha === weightDate);
-    setWeightValue(entryForDate?.peso ? String(entryForDate.peso) : "");
-    setWeightError("");
-    setWeightSuccess("");
+    const timerId = window.setTimeout(() => {
+      const entryForDate = trackingEntries.find((entry) => entry.fecha === weightDate);
+      setWeightValue(entryForDate?.peso ? String(entryForDate.peso) : "");
+      setWeightError("");
+      setWeightSuccess("");
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
   }, [trackingEntries, weightDate]);
 
   const stats = useMemo(() => {
@@ -241,11 +254,23 @@ export default function HomePage() {
   }, [trackingEntries, weeklyPlan, targetCalories, weekStart, complianceByDate]);
 
   const toggleCompliance = useCallback((date, checked) => {
-    setComplianceByDate((prev) => {
-      const updated = { ...prev, [date]: checked };
-      return updated;
-    });
-  }, []);
+    if (!complianceStorageKey) return;
+
+    const updated = { ...readStoredCompliance(complianceStorageKey) };
+
+    if (checked) {
+      updated[date] = true;
+    } else {
+      delete updated[date];
+    }
+
+    try {
+      localStorage.setItem(complianceStorageKey, JSON.stringify(updated));
+      setComplianceVersion((version) => version + 1);
+    } catch (err) {
+      console.error("Error saving compliance data:", err);
+    }
+  }, [complianceStorageKey]);
 
   async function handleSaveWeight(event) {
     event.preventDefault();

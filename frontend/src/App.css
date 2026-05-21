@@ -2406,12 +2406,18 @@ a {
   display: grid;
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
   gap: 14px;
+  align-items: start;
   min-height: min(68vh, 720px);
 }
 
 .chats-list-panel,
 .chat-thread-panel {
   min-width: 0;
+}
+
+.chats-list-panel {
+  align-self: start;
+  padding: 14px;
 }
 
 .chats-list-panel,
@@ -2442,7 +2448,7 @@ a {
 
 .chat-conversation-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .chat-conversation-item,
@@ -2451,7 +2457,7 @@ a {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 12px;
+  padding: 9px 10px;
   background: var(--surface-muted);
   color: var(--text);
   text-align: left;
@@ -2470,9 +2476,9 @@ a {
 }
 
 .chat-avatar {
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
   border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--line));
   border-radius: 50%;
   display: grid;
@@ -2564,8 +2570,19 @@ a {
 }
 
 .chat-thread-header {
-  padding-bottom: 12px;
+  gap: 10px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
+}
+
+.chat-thread-header .chat-avatar {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+}
+
+.chat-thread-header p {
+  display: none;
 }
 
 .chat-back-button {
