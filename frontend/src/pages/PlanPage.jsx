@@ -1,13 +1,19 @@
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
+  clearPlan,
   createMeal,
   createMealItem,
   createPlan,
+  deletePlan,
   deleteMealItem,
   fetchFoods,
   fetchFullPlan,
+  fetchFullPlansByUser,
   fetchRecipes,
+  fetchSharedFullPlan,
+  updatePlanName,
 } from "../services/api";
 import { fetchChatConversations, sendChatMessage } from "../services/chatApi";
 import { exportPlanToPDF } from "../utils/pdfExport";
@@ -24,6 +30,33 @@ function getCurrentWeekMonday() {
   const month = String(today.getMonth() + 1).padStart(2, "0");
   const date = String(today.getDate()).padStart(2, "0");
   return `${year}-${month}-${date}`;
+}
+
+function formatDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getNextAvailableWeek(plans) {
+  const usedWeeks = new Set((plans || []).map((plan) => plan.semana_inicio));
+  const candidate = new Date(`${getCurrentWeekMonday()}T00:00:00`);
+
+  while (usedWeeks.has(formatDateInput(candidate))) {
+    candidate.setDate(candidate.getDate() + 7);
+  }
+
+  return formatDateInput(candidate);
+}
+
+function formatPlanWeek(weekStart) {
+  if (!weekStart) return "Semana sin fecha";
+  return new Date(`${weekStart}T00:00:00`).toLocaleDateString("es-ES", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function guessMealType(hourValue) {
@@ -51,7 +84,9 @@ function truncateScrapingRecipeName(name, maxLength = 28) {
 
 export default function PlanPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [plan, setPlan] = useState(null);
+  const [savedPlans, setSavedPlans] = useState([]);
   const [foods, setFoods] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,38 +107,74 @@ export default function PlanPage() {
   const [shareSuccess, setShareSuccess] = useState("");
   const [sharingConversationId, setSharingConversationId] = useState(null);
   const [showSharePlan, setShowSharePlan] = useState(false);
+  const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const [newPlanName, setNewPlanName] = useState("");
+  const [newPlanWeek, setNewPlanWeek] = useState("");
+  const [planNameDraft, setPlanNameDraft] = useState("");
+  const [planActionLoading, setPlanActionLoading] = useState("");
+  const [planActionError, setPlanActionError] = useState("");
+  const [planActionSuccess, setPlanActionSuccess] = useState("");
+  const [planPendingDelete, setPlanPendingDelete] = useState(null);
+  const [showClearPlan, setShowClearPlan] = useState(false);
 
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id;
-  const weekFromQuery = new URLSearchParams(location.search).get("week");
+  const searchParams = new URLSearchParams(location.search);
+  const weekFromQuery = searchParams.get("week");
+  const sharedPlanParam = searchParams.get("sharedPlan");
+  const sharedPlanId = sharedPlanParam && /^\d+$/.test(sharedPlanParam)
+    ? Number(sharedPlanParam)
+    : null;
   const weekStart = weekFromQuery || getCurrentWeekMonday();
+  const isReadOnlySharedPlan = Boolean(sharedPlanId && plan?.user_id !== userId);
 
   async function loadPlanAndLibrary() {
     setLoading(true);
     setError("");
+    setFoods([]);
+    setRecipes([]);
+    setSavedPlans([]);
 
     try {
-      const [foodsData, recipesData] = await Promise.all([
-        fetchFoods("", userId),
-        fetchRecipes("", "", userId)
-      ]);
-      setFoods(foodsData);
-      setRecipes(recipesData);
-
       let fullPlan;
-      try {
-        fullPlan = await fetchFullPlan(userId, weekStart);
-      } catch (planError) {
-        if (!planError.message.includes("Plan no encontrado")) {
-          throw planError;
+      if (sharedPlanId) {
+        fullPlan = await fetchSharedFullPlan(sharedPlanId, userId);
+
+        if (fullPlan.user_id === userId) {
+          const [foodsData, recipesData, plansData] = await Promise.all([
+            fetchFoods("", userId),
+            fetchRecipes("", "", userId),
+            fetchFullPlansByUser(userId),
+          ]);
+          setFoods(foodsData);
+          setRecipes(recipesData);
+          setSavedPlans(plansData || []);
         }
+      } else {
+        const [foodsData, recipesData, plansData] = await Promise.all([
+          fetchFoods("", userId),
+          fetchRecipes("", "", userId),
+          fetchFullPlansByUser(userId),
+        ]);
+        setFoods(foodsData);
+        setRecipes(recipesData);
+        setSavedPlans(plansData || []);
 
-        await createPlan({
-          user_id: userId,
-          semana_inicio: weekStart,
-        });
+        try {
+          fullPlan = await fetchFullPlan(userId, weekStart);
+        } catch (planError) {
+          if (!planError.message.includes("Plan no encontrado")) {
+            throw planError;
+          }
 
-        fullPlan = await fetchFullPlan(userId, weekStart);
+          if (!weekFromQuery && plansData.length > 0) {
+            const latestPlan = plansData[plansData.length - 1];
+            navigate(`/plan?week=${latestPlan.semana_inicio}`, { replace: true });
+            return;
+          }
+
+          fullPlan = null;
+        }
       }
 
       setPlan(fullPlan);
@@ -123,7 +194,11 @@ export default function PlanPage() {
     }
 
     loadPlanAndLibrary();
-  }, [userId, weekStart]);
+  }, [userId, weekStart, sharedPlanId]);
+
+  useEffect(() => {
+    setPlanNameDraft(plan?.nombre || "");
+  }, [plan?.id, plan?.nombre]);
 
   const manualRecipes = useMemo(
     () => recipes.filter((recipe) => (recipe.origen || "").toLowerCase() === "manual"),
@@ -159,7 +234,7 @@ export default function PlanPage() {
     setError("");
 
     const raw = event.dataTransfer.getData("application/json");
-    if (!raw || !plan) return;
+    if (!raw || !plan || isReadOnlySharedPlan) return;
 
     let dragged;
     try {
@@ -210,6 +285,8 @@ export default function PlanPage() {
   }
 
   async function handleDeleteItem(itemId) {
+    if (isReadOnlySharedPlan) return;
+
     try {
       setError("");
       await deleteMealItem(itemId);
@@ -278,6 +355,118 @@ export default function PlanPage() {
     }
   }
 
+  function openCreatePlanModal() {
+    setNewPlanName("");
+    setNewPlanWeek(getNextAvailableWeek(savedPlans));
+    setPlanActionError("");
+    setShowCreatePlan(true);
+  }
+
+  async function handleCreatePlan(event) {
+    event.preventDefault();
+    const nombre = newPlanName.trim();
+
+    if (!nombre || !newPlanWeek) return;
+
+    try {
+      setPlanActionLoading("create");
+      setPlanActionError("");
+      setPlanActionSuccess("");
+      await createPlan({
+        user_id: userId,
+        nombre,
+        semana_inicio: newPlanWeek,
+      });
+      setShowCreatePlan(false);
+      setPlanActionSuccess(`"${nombre}" se ha creado correctamente.`);
+      if (newPlanWeek === weekStart) {
+        await loadPlanAndLibrary();
+      } else {
+        navigate(`/plan?week=${newPlanWeek}`);
+      }
+    } catch (err) {
+      setPlanActionError(err.message || "No se pudo crear el plan.");
+    } finally {
+      setPlanActionLoading("");
+    }
+  }
+
+  async function handleRenamePlan(event) {
+    event.preventDefault();
+    const nombre = planNameDraft.trim();
+
+    if (!plan || !nombre || isReadOnlySharedPlan) return;
+
+    try {
+      setPlanActionLoading("rename");
+      setPlanActionError("");
+      setPlanActionSuccess("");
+      const updatedPlan = await updatePlanName(plan.id, userId, nombre);
+      setPlan((current) => ({ ...current, nombre: updatedPlan.nombre }));
+      setSavedPlans((current) =>
+        current.map((savedPlan) =>
+          savedPlan.id === plan.id ? { ...savedPlan, nombre: updatedPlan.nombre } : savedPlan
+        )
+      );
+      setPlanActionSuccess("Nombre del plan actualizado.");
+    } catch (err) {
+      setPlanActionError(err.message || "No se pudo cambiar el nombre.");
+    } finally {
+      setPlanActionLoading("");
+    }
+  }
+
+  async function handleClearPlan() {
+    if (!plan || isReadOnlySharedPlan) return;
+
+    try {
+      setPlanActionLoading("clear");
+      setPlanActionError("");
+      setPlanActionSuccess("");
+      await clearPlan(plan.id, userId);
+      setShowClearPlan(false);
+      setPlanActionSuccess("El plan está vacío y listo para empezar de nuevo.");
+      await loadPlanAndLibrary();
+    } catch (err) {
+      setPlanActionError(err.message || "No se pudo vaciar el plan.");
+    } finally {
+      setPlanActionLoading("");
+    }
+  }
+
+  async function handleDeletePlan() {
+    if (!planPendingDelete) return;
+
+    try {
+      setPlanActionLoading("delete");
+      setPlanActionError("");
+      setPlanActionSuccess("");
+      await deletePlan(planPendingDelete.id, userId);
+
+      const remainingPlans = savedPlans.filter(
+        (savedPlan) => savedPlan.id !== planPendingDelete.id
+      );
+      const deletedCurrentPlan = plan?.id === planPendingDelete.id;
+      setPlanPendingDelete(null);
+      setSavedPlans(remainingPlans);
+      setPlanActionSuccess("Plan eliminado.");
+
+      if (deletedCurrentPlan) {
+        if (remainingPlans.length > 0) {
+          const nextPlan = remainingPlans[remainingPlans.length - 1];
+          navigate(`/plan?week=${nextPlan.semana_inicio}`, { replace: true });
+        } else {
+          setPlan(null);
+          navigate("/plan", { replace: true });
+        }
+      }
+    } catch (err) {
+      setPlanActionError(err.message || "No se pudo eliminar el plan.");
+    } finally {
+      setPlanActionLoading("");
+    }
+  }
+
   if (loading) {
     return <p>Cargando plan semanal...</p>;
   }
@@ -286,35 +475,151 @@ export default function PlanPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h2>Plan semanal</h2>
-          <p>Arrastra alimentos o recetas al día y hora exacta que quieras.</p>
+          <h2>
+            {isReadOnlySharedPlan
+              ? plan?.nombre || "Plan semanal compartido"
+              : plan?.nombre || "Planes semanales"}
+          </h2>
+          <p>
+            {isReadOnlySharedPlan
+              ? "Puedes consultar este plan, pero solo su propietario puede modificarlo."
+              : "Guarda, organiza y reutiliza tus planes semanales desde un mismo lugar."}
+          </p>
         </div>
         <div className="plan-header-actions">
-          <button
-            type="button"
-            className="secondary-action-button"
-            onClick={openSharePlanModal}
-            disabled={!plan}
-          >
-            Compartir plan
-          </button>
-          <button
-            type="button"
-            className="profile-edit-button"
-            onClick={handleExportPDF}
-            disabled={exportLoading || !plan}
-          >
-            {exportLoading ? "Generando..." : "Exportar PDF"}
-          </button>
+          {!isReadOnlySharedPlan ? (
+            <button
+              type="button"
+              className="plan-action-button plan-action-button-primary"
+              onClick={openCreatePlanModal}
+            >
+              Nuevo plan
+            </button>
+          ) : null}
+          {!isReadOnlySharedPlan && plan ? (
+            <button
+              type="button"
+              className="plan-action-button secondary-action-button"
+              onClick={openSharePlanModal}
+              disabled={!plan}
+            >
+              Compartir plan
+            </button>
+          ) : null}
+          {!isReadOnlySharedPlan && plan ? (
+            <button
+              type="button"
+              className="plan-action-button delete-button"
+              onClick={() => {
+                setPlanActionError("");
+                setShowClearPlan(true);
+              }}
+            >
+              Vaciar
+            </button>
+          ) : null}
+          {plan ? (
+            <button
+              type="button"
+              className="plan-action-button profile-edit-button"
+              onClick={handleExportPDF}
+              disabled={exportLoading}
+            >
+              {exportLoading ? "Generando..." : "Exportar PDF"}
+            </button>
+          ) : null}
         </div>
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
       {exportError ? <p className="error-text">{exportError}</p> : null}
       {shareSuccess ? <p className="success-text">{shareSuccess}</p> : null}
+      {planActionError ? <p className="error-text">{planActionError}</p> : null}
+      {planActionSuccess ? <p className="success-text">{planActionSuccess}</p> : null}
 
-      <section className="plan-board">
-        <aside className="card plan-library">
+      {!isReadOnlySharedPlan ? (
+        <section className="card saved-plans-panel">
+          <div className="saved-plans-header">
+            <div>
+              <h3>Mis planes guardados</h3>
+              <p>Abre un plan, cambia su nombre o crea uno para otra semana.</p>
+            </div>
+            <button
+              type="button"
+              className="secondary-action-button"
+              onClick={openCreatePlanModal}
+            >
+              Crear plan
+            </button>
+          </div>
+
+          {savedPlans.length === 0 ? (
+            <p className="item-note">Todavía no tienes planes guardados.</p>
+          ) : (
+            <div className="saved-plans-list">
+              {savedPlans.map((savedPlan) => (
+                <div
+                  key={savedPlan.id}
+                  className={`saved-plan-item ${plan?.id === savedPlan.id ? "active" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className="saved-plan-open"
+                    onClick={() => navigate(`/plan?week=${savedPlan.semana_inicio}`)}
+                  >
+                    <strong>{savedPlan.nombre || "Plan semanal"}</strong>
+                    <span>{formatPlanWeek(savedPlan.semana_inicio)}</span>
+                    <small>{savedPlan.meals?.length || 0} comidas</small>
+                  </button>
+                  <button
+                    type="button"
+                    className="saved-plan-delete"
+                    aria-label={`Eliminar ${savedPlan.nombre || "plan semanal"}`}
+                    onClick={() => {
+                      setPlanActionError("");
+                      setPlanPendingDelete(savedPlan);
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {plan ? (
+            <form className="plan-name-form" onSubmit={handleRenamePlan}>
+              <label htmlFor="plan-name">Nombre del plan actual</label>
+              <div>
+                <input
+                  id="plan-name"
+                  type="text"
+                  maxLength={120}
+                  value={planNameDraft}
+                  onChange={(event) => setPlanNameDraft(event.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="secondary-action-button"
+                  disabled={
+                    !planNameDraft.trim() ||
+                    planNameDraft.trim() === (plan.nombre || "").trim() ||
+                    planActionLoading === "rename"
+                  }
+                >
+                  {planActionLoading === "rename" ? "Guardando..." : "Guardar nombre"}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </section>
+      ) : null}
+
+      {plan ? (
+        <>
+          <section className={`plan-board ${isReadOnlySharedPlan ? "plan-board-read-only" : ""}`}>
+        {!isReadOnlySharedPlan ? (
+          <aside className="card plan-library">
           <h3>Comidas disponibles</h3>
           <p>Organiza por categorías y arrastra al horario deseado.</p>
 
@@ -446,7 +751,8 @@ export default function PlanPage() {
               )}
             </div>
           </div>
-        </aside>
+          </aside>
+        ) : null}
 
         <section className="card plan-calendar-week">
           <header className="week-header">
@@ -471,31 +777,45 @@ export default function PlanPage() {
                     <div
                       key={`${day}-${hour}`}
                       className={`week-cell ${isActive ? "drag-active" : ""}`}
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        setActiveDropDay(day);
-                        setActiveDropHour(hour);
-                      }}
-                      onDragLeave={() => {
-                        setActiveDropDay("");
-                        setActiveDropHour("");
-                      }}
-                      onDrop={(event) => handleDrop(day, hour, event)}
+                      onDragOver={
+                        isReadOnlySharedPlan
+                          ? undefined
+                          : (event) => {
+                              event.preventDefault();
+                              setActiveDropDay(day);
+                              setActiveDropHour(hour);
+                            }
+                      }
+                      onDragLeave={
+                        isReadOnlySharedPlan
+                          ? undefined
+                          : () => {
+                              setActiveDropDay("");
+                              setActiveDropHour("");
+                            }
+                      }
+                      onDrop={
+                        isReadOnlySharedPlan
+                          ? undefined
+                          : (event) => handleDrop(day, hour, event)
+                      }
                     >
                       {meal?.items?.map((item) => (
                         <div key={item.id} className="week-pill">
                           <span>{item.food?.nombre || item.recipe?.nombre}</span>
-                          <button
-                            type="button"
-                            className="week-pill-delete"
-                            aria-label="Eliminar comida del calendario"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleDeleteItem(item.id);
-                            }}
-                          >
-                            ×
-                          </button>
+                          {!isReadOnlySharedPlan ? (
+                            <button
+                              type="button"
+                              className="week-pill-delete"
+                              aria-label="Eliminar comida del calendario"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteItem(item.id);
+                              }}
+                            >
+                              ×
+                            </button>
+                          ) : null}
                         </div>
                       ))}
                     </div>
@@ -505,9 +825,167 @@ export default function PlanPage() {
             ))}
           </div>
         </section>
-      </section>
+          </section>
 
-      {dropping ? <p>Guardando en el plan...</p> : null}
+          {dropping && !isReadOnlySharedPlan ? <p>Guardando en el plan...</p> : null}
+        </>
+      ) : !sharedPlanId ? (
+        <section className="card plan-empty-state">
+          <h3>Empieza tu primer plan semanal</h3>
+          <p>Asigna un nombre y una semana para empezar a organizar tus comidas.</p>
+          <button
+            type="button"
+            className="plan-action-button plan-action-button-primary"
+            onClick={openCreatePlanModal}
+          >
+            Crear un plan
+          </button>
+        </section>
+      ) : null}
+
+      {showCreatePlan && (
+        <div className="modal-overlay" onClick={() => setShowCreatePlan(false)}>
+          <form
+            className="modal-card plan-create-modal"
+            onSubmit={handleCreatePlan}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>Crear plan semanal</h3>
+              <button
+                className="close-button"
+                type="button"
+                onClick={() => setShowCreatePlan(false)}
+                aria-label="Cerrar creación de plan"
+              >
+                x
+              </button>
+            </div>
+
+            <label htmlFor="new-plan-name">Nombre del plan</label>
+            <input
+              id="new-plan-name"
+              type="text"
+              maxLength={120}
+              value={newPlanName}
+              onChange={(event) => setNewPlanName(event.target.value)}
+              placeholder="Ej. Semana de fuerza"
+              autoFocus
+            />
+
+            <label htmlFor="new-plan-week">Semana de inicio</label>
+            <input
+              id="new-plan-week"
+              type="date"
+              value={newPlanWeek}
+              onChange={(event) => setNewPlanWeek(event.target.value)}
+            />
+
+            {planActionError ? <p className="error-text">{planActionError}</p> : null}
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-action-button"
+                onClick={() => setShowCreatePlan(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="submit-button"
+                disabled={
+                  !newPlanName.trim() ||
+                  !newPlanWeek ||
+                  planActionLoading === "create"
+                }
+              >
+                {planActionLoading === "create" ? "Creando..." : "Crear plan"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {planPendingDelete && (
+        <div className="modal-overlay" onClick={() => setPlanPendingDelete(null)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Eliminar plan</h3>
+              <button
+                className="close-button"
+                type="button"
+                onClick={() => setPlanPendingDelete(null)}
+                aria-label="Cerrar confirmación"
+              >
+                x
+              </button>
+            </div>
+            <p>
+              Se eliminará <strong>{planPendingDelete.nombre}</strong> y todo su contenido.
+              Esta acción no se puede deshacer.
+            </p>
+            {planActionError ? <p className="error-text">{planActionError}</p> : null}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-action-button"
+                onClick={() => setPlanPendingDelete(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="delete-button"
+                onClick={handleDeletePlan}
+                disabled={planActionLoading === "delete"}
+              >
+                {planActionLoading === "delete" ? "Eliminando..." : "Eliminar plan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearPlan && plan && (
+        <div className="modal-overlay" onClick={() => setShowClearPlan(false)}>
+          <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Vaciar plan semanal</h3>
+              <button
+                className="close-button"
+                type="button"
+                onClick={() => setShowClearPlan(false)}
+                aria-label="Cerrar confirmación"
+              >
+                x
+              </button>
+            </div>
+            <p>
+              Se quitarán todas las comidas de <strong>{plan.nombre}</strong>. El plan y su
+              nombre seguirán guardados para que puedas empezar de nuevo.
+            </p>
+            {planActionError ? <p className="error-text">{planActionError}</p> : null}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-action-button"
+                onClick={() => setShowClearPlan(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="delete-button"
+                onClick={handleClearPlan}
+                disabled={planActionLoading === "clear"}
+              >
+                {planActionLoading === "clear" ? "Vaciando..." : "Vaciar plan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSharePlan && (
         <div className="modal-overlay" onClick={closeSharePlanModal}>

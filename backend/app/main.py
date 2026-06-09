@@ -172,6 +172,24 @@ def ensure_food_user_column() -> None:
             text("ALTER TABLE foods ADD COLUMN IF NOT EXISTS user_id INTEGER")
         )
 
+
+def ensure_weekly_plan_name_column() -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "ALTER TABLE weekly_plans "
+                "ADD COLUMN IF NOT EXISTS nombre VARCHAR DEFAULT 'Plan semanal'"
+            )
+        )
+        connection.execute(
+            text(
+                "UPDATE weekly_plans "
+                "SET nombre = COALESCE(NULLIF(TRIM(nombre), ''), 'Plan semanal')"
+            )
+        )
+        connection.execute(text("ALTER TABLE weekly_plans ALTER COLUMN nombre SET NOT NULL"))
+
+
 DEFAULT_FOODS = [
     # Cereales y granos
     {"nombre": "Avena", "calorias": 389, "proteinas": 16.9, "carbos": 66.3, "grasas": 6.9, "fuente": "default"},
@@ -353,6 +371,7 @@ def initialize_database(retries: int = 20, delay: int = 3) -> None:
             ensure_user_auth_columns()
             ensure_user_nutrition_columns()
             ensure_recipe_macro_columns()
+            ensure_weekly_plan_name_column()
             ensure_default_foods()
             print("Base de datos inicializada correctamente")
             return
@@ -377,6 +396,7 @@ ensure_user_auth_columns()
 ensure_user_nutrition_columns()
 ensure_recipe_macro_columns()
 ensure_food_user_column()
+ensure_weekly_plan_name_column()
 ensure_default_foods()
 ensure_scraping_recipe_macros()
 

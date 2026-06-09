@@ -119,7 +119,13 @@ class RecipeResponse(RecipeCreate):
         
 class WeeklyPlanCreate(BaseModel):
     user_id: int
+    nombre: str = Field(default="Plan semanal", min_length=1, max_length=120)
     semana_inicio: date
+
+
+class WeeklyPlanUpdate(BaseModel):
+    user_id: int
+    nombre: str = Field(min_length=1, max_length=120)
 
 
 class WeeklyPlanResponse(WeeklyPlanCreate):
@@ -222,6 +228,7 @@ class MealDetailResponse(BaseModel):
 class WeeklyPlanFullResponse(BaseModel):
     id: int
     user_id: int
+    nombre: str
     semana_inicio: date
     meals: list[MealDetailResponse] = []
 

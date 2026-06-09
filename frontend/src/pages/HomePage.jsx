@@ -44,6 +44,35 @@ function formatCalendarDay(isoDate) {
   });
 }
 
+function getMonthStart(isoDate) {
+  const date = new Date(`${isoDate}T00:00:00`);
+  return toISODate(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+
+function moveMonth(isoDate, amount) {
+  const date = new Date(`${isoDate}T00:00:00`);
+  return toISODate(new Date(date.getFullYear(), date.getMonth() + amount, 1));
+}
+
+function getMonthCalendarCells(monthStart) {
+  const firstDay = new Date(`${monthStart}T00:00:00`);
+  const nextMonth = new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 1);
+  const totalDays = Math.round((nextMonth - firstDay) / 86400000);
+  const leadingEmptyDays = (firstDay.getDay() + 6) % 7;
+  const dates = Array.from({ length: totalDays }, (_, index) => addDays(monthStart, index));
+  const cells = [...Array(leadingEmptyDays).fill(null), ...dates];
+  const trailingEmptyDays = (7 - (cells.length % 7)) % 7;
+
+  return [...cells, ...Array(trailingEmptyDays).fill(null)];
+}
+
+function formatMonthLabel(monthStart) {
+  return new Date(`${monthStart}T00:00:00`).toLocaleDateString("es-ES", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
@@ -101,6 +130,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showWeightCalendar, setShowWeightCalendar] = useState(false);
+  const [showStreakCalendar, setShowStreakCalendar] = useState(false);
+  const [streakMonthStart, setStreakMonthStart] = useState(() => getMonthStart(toISODate(new Date())));
   const [weightDate, setWeightDate] = useState(() => toISODate(new Date()));
   const [weightValue, setWeightValue] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
@@ -161,6 +192,21 @@ export default function HomePage() {
 
     return () => window.clearTimeout(timerId);
   }, [trackingEntries, weightDate]);
+
+  useEffect(() => {
+    if (!showStreakCalendar) return undefined;
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setShowStreakCalendar(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showStreakCalendar]);
+
+  const todayIso = toISODate(new Date());
 
   const stats = useMemo(() => {
     const sortedTracking = [...trackingEntries].sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -232,10 +278,10 @@ export default function HomePage() {
     const completedDaysCount = completedWeekDays.length;
     const adherence = clampPercent((completedDaysCount / 7) * 100);
 
-    let streak = 0;
+    const currentStreakDates = [];
     let cursor = todayIso;
     while (complianceByDate[cursor]) {
-      streak += 1;
+      currentStreakDates.push(cursor);
       cursor = addDays(cursor, -1);
     }
 
@@ -246,12 +292,30 @@ export default function HomePage() {
       weeklyWeightDays: last7WeightDays,
       monthlyWeightDays: last30WeightDays,
       macrosByDate,
-      streak,
+      streak: currentStreakDates.length,
+      currentStreakDates,
       adherence,
       weekDays,
       completedDaysCount,
     };
   }, [trackingEntries, weeklyPlan, targetCalories, weekStart, complianceByDate]);
+
+  const currentMonthStart = getMonthStart(todayIso);
+  const streakCalendarCells = useMemo(
+    () => getMonthCalendarCells(streakMonthStart),
+    [streakMonthStart]
+  );
+  const currentStreakDates = useMemo(
+    () => new Set(stats.currentStreakDates),
+    [stats.currentStreakDates]
+  );
+  const completedDaysInStreakMonth = useMemo(
+    () =>
+      streakCalendarCells.filter(
+        (date) => date && date <= todayIso && Boolean(complianceByDate[date])
+      ).length,
+    [complianceByDate, streakCalendarCells, todayIso]
+  );
 
   const toggleCompliance = useCallback((date, checked) => {
     if (!complianceStorageKey) return;
@@ -336,8 +400,6 @@ export default function HomePage() {
     if (streak >= 1) return "flame-1";
     return "flame-0";
   }
-
-  const todayIso = toISODate(new Date());
 
   return (
     <div className="page home-page">
@@ -450,7 +512,19 @@ export default function HomePage() {
           </article>
 
           <article className="card stat-card">
-            <h3>Racha cumpliendo la dieta</h3>
+            <div className="streak-card-head">
+              <h3>Racha cumpliendo la dieta</h3>
+              <button
+                type="button"
+                className="secondary-action-button streak-calendar-trigger"
+                onClick={() => {
+                  setStreakMonthStart(currentMonthStart);
+                  setShowStreakCalendar(true);
+                }}
+              >
+                Ver calendario
+              </button>
+            </div>
             <div className="streak-row">
               <p className="stat-main">{stats.streak} días</p>
               <span className={`streak-flame ${getFlameLevel(stats.streak)}`} aria-hidden="true">
@@ -523,6 +597,106 @@ export default function HomePage() {
                   <strong>{day.entry ? `${day.entry.peso} kg` : "--"}</strong>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showStreakCalendar ? (
+        <div className="modal-overlay" onClick={() => setShowStreakCalendar(false)}>
+          <div
+            className="modal-card streak-calendar-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="streak-calendar-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 id="streak-calendar-title">Calendario de racha</h3>
+                <p className="stat-sub">Consulta y actualiza los días que has cumplido tu dieta.</p>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setShowStreakCalendar(false)}
+                aria-label="Cerrar calendario de racha"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="streak-calendar-summary">
+              <div>
+                <span>Racha actual</span>
+                <strong>{stats.streak} días</strong>
+              </div>
+              <div>
+                <span>Completados en el mes</span>
+                <strong>{completedDaysInStreakMonth}</strong>
+              </div>
+            </div>
+
+            <div className="streak-month-navigation">
+              <button
+                type="button"
+                onClick={() => setStreakMonthStart((month) => moveMonth(month, -1))}
+                aria-label="Ver mes anterior"
+              >
+                &lt;
+              </button>
+              <strong>{formatMonthLabel(streakMonthStart)}</strong>
+              <button
+                type="button"
+                onClick={() => setStreakMonthStart((month) => moveMonth(month, 1))}
+                disabled={streakMonthStart >= currentMonthStart}
+                aria-label="Ver mes siguiente"
+              >
+                &gt;
+              </button>
+            </div>
+
+            <div className="streak-weekdays" aria-hidden="true">
+              {["L", "M", "X", "J", "V", "S", "D"].map((day) => (
+                <span key={day}>{day}</span>
+              ))}
+            </div>
+
+            <div className="streak-calendar-grid">
+              {streakCalendarCells.map((date, index) => {
+                if (!date) {
+                  return <span key={`empty-${index}`} className="streak-calendar-empty" aria-hidden="true" />;
+                }
+
+                const completed = Boolean(complianceByDate[date]);
+                const isCurrentStreak = currentStreakDates.has(date);
+                const isFuture = date > todayIso;
+                const isToday = date === todayIso;
+
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    className={`streak-calendar-day ${completed ? "completed" : ""} ${
+                      isCurrentStreak ? "current-streak" : ""
+                    } ${isFuture ? "future" : ""} ${isToday ? "today" : ""}`}
+                    disabled={isFuture}
+                    aria-pressed={completed}
+                    aria-label={`${formatCalendarDay(date)}: ${
+                      completed ? "día cumplido" : "día sin cumplir"
+                    }`}
+                    onClick={() => toggleCompliance(date, !completed)}
+                  >
+                    <span>{new Date(`${date}T00:00:00`).getDate()}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="streak-calendar-legend">
+              <span><i className="current" /> Racha actual</span>
+              <span><i className="completed" /> Cumplido anteriormente</span>
+              <span><i className="pending" /> Sin cumplir</span>
             </div>
           </div>
         </div>

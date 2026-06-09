@@ -67,6 +67,14 @@ export async function fetchFullPlan(userId, weekStart) {
   return handleResponse(response, "Error al obtener el plan semanal");
 }
 
+export async function fetchSharedFullPlan(planId, userId) {
+  const params = new URLSearchParams({ user_id: userId });
+  const response = await fetch(
+    `${API_BASE_URL}/plans/shared/${planId}/full?${params.toString()}`
+  );
+  return handleResponse(response, "Error al obtener el plan compartido");
+}
+
 export async function fetchFullPlansByUser(userId) {
   const response = await fetch(`${API_BASE_URL}/plans/user/${userId}/full`);
   return handleResponse(response, "Error al obtener planes completos");
@@ -82,6 +90,38 @@ export async function createPlan(planData) {
   });
 
   return handleResponse(response, "Error al crear el plan semanal");
+}
+
+export async function updatePlanName(planId, userId, nombre) {
+  const response = await fetch(`${API_BASE_URL}/plans/${planId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      nombre,
+    }),
+  });
+
+  return handleResponse(response, "Error al cambiar el nombre del plan");
+}
+
+export async function clearPlan(planId, userId) {
+  const params = new URLSearchParams({ user_id: userId });
+  const response = await fetch(
+    `${API_BASE_URL}/plans/${planId}/clear?${params.toString()}`,
+    { method: "POST" }
+  );
+  return handleResponse(response, "Error al vaciar el plan");
+}
+
+export async function deletePlan(planId, userId) {
+  const params = new URLSearchParams({ user_id: userId });
+  const response = await fetch(`${API_BASE_URL}/plans/${planId}?${params.toString()}`, {
+    method: "DELETE",
+  });
+  return handleResponse(response, "Error al eliminar el plan");
 }
 
 export async function createMeal(mealData) {

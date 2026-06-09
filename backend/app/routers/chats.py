@@ -87,7 +87,7 @@ def get_plan_share(plan: WeeklyPlan | None) -> ChatWeeklyPlanShare | None:
 
     return ChatWeeklyPlanShare(
         id=plan.id,
-        nombre="Plan semanal",
+        nombre=plan.nombre,
         semana_inicio=plan.semana_inicio,
         semana_fin=plan.semana_inicio + timedelta(days=6),
         meal_count=len(meals),

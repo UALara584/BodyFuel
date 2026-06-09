@@ -103,6 +103,7 @@ class WeeklyPlan(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey(USER_FK), nullable=False)
+    nombre = Column(String, nullable=False, default="Plan semanal")
     semana_inicio = Column(Date, nullable=False)
 
     meals = relationship("Meal", back_populates="weekly_plan", cascade="all, delete")

@@ -87,7 +87,16 @@ function RecipeShareCard({ recipe, onOpen }) {
 }
 
 function PlanShareCard({ plan, onOpen }) {
-  if (!plan) return null;
+  if (!plan) {
+    return (
+      <div className="chat-share-card">
+        <div className="chat-share-content">
+          <span>Plan semanal compartido</span>
+          <strong>Este plan ya no está disponible</strong>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="chat-share-card">
@@ -329,7 +338,13 @@ export default function ChatsPage() {
           ) : (
             <PlanShareCard
               plan={message.weekly_plan}
-              onOpen={() => navigate(`/plan?week=${message.weekly_plan?.semana_inicio || ""}`)}
+              onOpen={() =>
+                navigate(
+                  `/plan?sharedPlan=${message.weekly_plan?.id || ""}&week=${
+                    message.weekly_plan?.semana_inicio || ""
+                  }`
+                )
+              }
             />
           )}
           <small>{formatChatDate(message.created_at)}</small>

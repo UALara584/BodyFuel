@@ -18,3 +18,7 @@ VITE_API_BASE_URL=http://localhost:8000
 ```
 
 En Docker esta variable se define desde `docker-compose.yml`.
+
+## PWA
+
+El frontend incluye `manifest.webmanifest`, iconos y `sw.js` para que BodyFuel se pueda añadir a la pantalla de inicio del movil como aplicacion web instalable.
