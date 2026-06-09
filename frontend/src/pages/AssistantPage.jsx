@@ -42,9 +42,19 @@ export default function AssistantPage() {
   }
 
   useEffect(() => {
+    let cancelled = false;
+
     if (!userId) {
-      setMessages([INITIAL_MESSAGE]);
-      return;
+      const timerId = window.setTimeout(() => {
+        if (!cancelled) {
+          setMessages([INITIAL_MESSAGE]);
+        }
+      }, 0);
+
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timerId);
+      };
     }
 
     async function loadHistory() {
@@ -53,6 +63,8 @@ export default function AssistantPage() {
 
       try {
         const data = await fetchAssistantHistory(userId);
+        if (cancelled) return;
+
         const historyMessages = (data.items || []).map((item) => ({
           role: item.role,
           text: item.content,
@@ -60,15 +72,22 @@ export default function AssistantPage() {
 
         setMessages(historyMessages.length > 0 ? historyMessages : [INITIAL_MESSAGE]);
       } catch (err) {
+        if (cancelled) return;
         setError(err.message);
         setMessages([INITIAL_MESSAGE]);
       } finally {
-        setLoadingHistory(false);
-        scrollToBottom();
+        if (!cancelled) {
+          setLoadingHistory(false);
+          scrollToBottom();
+        }
       }
     }
 
     loadHistory();
+
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   async function sendMessage(messageText) {

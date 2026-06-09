@@ -75,6 +75,18 @@ export async function fetchSharedFullPlan(planId, userId) {
   return handleResponse(response, "Error al obtener el plan compartido");
 }
 
+export async function cloneSharedPlanToMyPlans(planId, userId) {
+  const response = await fetch(`${API_BASE_URL}/plans/shared/${planId}/clone`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ user_id: userId }),
+  });
+
+  return handleResponse(response, "Error al guardar el plan compartido");
+}
+
 export async function fetchFullPlansByUser(userId) {
   const response = await fetch(`${API_BASE_URL}/plans/user/${userId}/full`);
   return handleResponse(response, "Error al obtener planes completos");
@@ -324,13 +336,19 @@ export async function deleteUserAccount(userId, password) {
 }
 
 export async function askNutritionAssistant(message, userId) {
-  const response = await fetch(`${API_BASE_URL}/assistant/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ message, user_id: userId ?? null }),
-  });
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/assistant/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message, user_id: userId ?? null }),
+    });
+  } catch {
+    throw new Error("No se pudo conectar con el asistente. Comprueba que el backend esté activo.");
+  }
 
   return handleResponse(response, "Error al consultar el asistente");
 }

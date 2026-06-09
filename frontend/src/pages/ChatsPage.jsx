@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { UserAvatar } from "../components/UserAvatar";
 import { fetchFullPlansByUser, fetchRecipes } from "../services/api";
 import {
   createOrGetChatConversation,
@@ -43,15 +44,6 @@ function getMessagePreview(message) {
     return "Plan semanal compartido";
   }
   return message.content || "Mensaje";
-}
-
-function getInitials(name) {
-  return (name || "U")
-    .split(" ")
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 }
 
 function notifyChatCountersChanged() {
@@ -404,7 +396,11 @@ export default function ChatsPage() {
                 }`}
                 onClick={() => navigate(`/chats/${conversation.id}`)}
               >
-                <span className="chat-avatar">{getInitials(conversation.other_user?.nombre)}</span>
+                <UserAvatar
+                  avatar={conversation.other_user?.avatar}
+                  name={conversation.other_user?.nombre}
+                  className="chat-avatar"
+                />
                 <span className="chat-conversation-main">
                   <strong>{conversation.other_user?.nombre}</strong>
                   <small>{getMessagePreview(conversation.last_message)}</small>
@@ -437,7 +433,11 @@ export default function ChatsPage() {
                 >
                   &lt;
                 </button>
-                <span className="chat-avatar">{getInitials(selectedConversation?.other_user?.nombre)}</span>
+                <UserAvatar
+                  avatar={selectedConversation?.other_user?.avatar}
+                  name={selectedConversation?.other_user?.nombre}
+                  className="chat-avatar"
+                />
                 <div>
                   <h3>{selectedConversation?.other_user?.nombre || "Chat"}</h3>
                   <p>Comparte mensajes, recetas y planes semanales.</p>
@@ -529,7 +529,7 @@ export default function ChatsPage() {
                     className="chat-picker-item"
                     onClick={() => handleStartConversation(user)}
                   >
-                    <span className="chat-avatar">{getInitials(user.nombre)}</span>
+                    <UserAvatar avatar={user.avatar} name={user.nombre} className="chat-avatar" />
                     <span>
                       <strong>{user.nombre}</strong>
                       <small>{user.email}</small>

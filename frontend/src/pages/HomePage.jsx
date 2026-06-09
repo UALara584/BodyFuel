@@ -36,6 +36,13 @@ function formatShortDate(isoDate) {
   return `${date.getDate()}/${date.getMonth() + 1}`;
 }
 
+function formatWeekdayShort(isoDate) {
+  const label = new Date(`${isoDate}T00:00:00`).toLocaleDateString("es-ES", {
+    weekday: "short",
+  });
+  return label.replace(".", "").slice(0, 3);
+}
+
 function formatCalendarDay(isoDate) {
   const date = new Date(`${isoDate}T00:00:00`);
   return date.toLocaleDateString("es-ES", {
@@ -110,7 +117,6 @@ const DAY_NAMES = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado"
 export default function HomePage() {
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userName = currentUser?.nombre || "Usuario";
-  const initial = userName.charAt(0).toUpperCase() || "U";
   const userId = currentUser?.id;
   const targetCalories = Number(currentUser?.calorias_objetivo || 0);
   const weekStart = getCurrentWeekMonday();
@@ -316,6 +322,25 @@ export default function HomePage() {
       ).length,
     [complianceByDate, streakCalendarCells, todayIso]
   );
+  const weightChartDays = useMemo(() => {
+    const values = stats.weeklyWeightDays
+      .map((day) => Number(day.entry?.peso || 0))
+      .filter((value) => value > 0);
+    const min = values.length ? Math.min(...values) : 0;
+    const max = values.length ? Math.max(...values) : 0;
+    const range = Math.max(max - min, 1);
+
+    return stats.weeklyWeightDays.map((day, index) => {
+      const weight = Number(day.entry?.peso || 0);
+      const fallbackHeight = 34 + ((index * 13) % 36);
+      const height = weight ? 46 + ((weight - min) / range) * 48 : fallbackHeight;
+
+      return {
+        ...day,
+        height: Math.round(height),
+      };
+    });
+  }, [stats.weeklyWeightDays]);
 
   const toggleCompliance = useCallback((date, checked) => {
     if (!complianceStorageKey) return;
@@ -403,49 +428,75 @@ export default function HomePage() {
 
   return (
     <div className="page home-page">
-      <section className="home-top">
-        <div>
-          <p className="home-greeting">Buenos días</p>
-          <h2 className="home-user-name">{userName}</h2>
-        </div>
-        <div className="home-user-badge" aria-hidden="true">
-          {initial}
-        </div>
-      </section>
+      <div className="home-mobile-greeting">
+        <p>Buenos días</p>
+        <h2>{userName}</h2>
+      </div>
 
-      {loading ? <p>Cargando estadisticas...</p> : null}
+      {loading ? <div className="dashboard-loading">Cargando estadísticas...</div> : null}
       {error ? <p className="error-text">{error}</p> : null}
 
       {!loading && !error ? (
-        <section className="stats-grid">
-          <article className="card stat-card">
-            <h3>Calorías de hoy</h3>
-            <p className="stat-main">{stats.consumedToday} kcal</p>
-            <p className="stat-sub">
-              Objetivo: {targetCalories || "-"} kcal · Restantes: {stats.remainingToday} kcal
-            </p>
-            <div className="home-progress-track">
-              <div className="home-progress-fill" style={{ width: `${stats.consumedPercent}%` }} />
+        <section className="dashboard-grid">
+          <article className="dashboard-card dashboard-calories-card">
+            <div className="dashboard-card-heading">
+              <h3>Calorías de hoy</h3>
+              <span className="dashboard-bolt" aria-hidden="true">ϟ</span>
+            </div>
+
+            <div
+              className="calorie-ring"
+              style={{ "--dashboard-progress": `${stats.consumedPercent * 3.6}deg` }}
+              aria-label={`${stats.consumedPercent}% del objetivo diario`}
+            >
+              <div className="calorie-ring-inner">
+                <strong>{stats.consumedToday}</strong>
+                <span>KCAL</span>
+              </div>
+            </div>
+
+            <div className="calorie-summary">
+              <div>
+                <span>Objetivo</span>
+                <strong>{targetCalories || "-"} kcal</strong>
+              </div>
+              <div>
+                <span>Restante</span>
+                <strong>{stats.remainingToday} kcal</strong>
+              </div>
             </div>
           </article>
 
-          <article className="card stat-card stat-wide home-weight-card">
-            <div className="home-weight-head">
+          <article className="dashboard-card dashboard-weight-card">
+            <div className="dashboard-card-heading dashboard-weight-heading">
               <div>
                 <h3>Evolución de peso (7 días)</h3>
-                <p className="stat-sub">Registra tu peso diario y revisa la progresión reciente.</p>
+                <p>Registra tu progreso diario</p>
               </div>
-              <button
-                type="button"
-                className="secondary-action-button"
-                onClick={() => setShowWeightCalendar(true)}
-              >
+              <button type="button" onClick={() => setShowWeightCalendar(true)}>
                 Ver calendario 30 días
               </button>
             </div>
 
-            <form className="weight-entry-form" onSubmit={handleSaveWeight}>
-              <label className="field-group">
+            <div className="dashboard-weight-chart" aria-label="Gráfico de peso de los últimos 7 días">
+              {weightChartDays.map((day) => (
+                <div key={day.date} className="dashboard-weight-column">
+                  <span className="dashboard-weight-value">
+                    {day.entry ? `${day.entry.peso} kg` : "--"}
+                  </span>
+                  <div
+                    className={`dashboard-weight-bar ${day.date === todayIso ? "today" : ""} ${
+                      day.entry ? "has-value" : ""
+                    }`}
+                    style={{ height: `${day.height}%` }}
+                  />
+                  <small>{formatShortDate(day.date)}</small>
+                </div>
+              ))}
+            </div>
+
+            <form className="dashboard-weight-form" onSubmit={handleSaveWeight}>
+              <label>
                 <span>Fecha</span>
                 <input
                   type="date"
@@ -455,7 +506,7 @@ export default function HomePage() {
                 />
               </label>
 
-              <label className="field-group">
+              <label>
                 <span>Peso (kg)</span>
                 <input
                   type="number"
@@ -467,43 +518,52 @@ export default function HomePage() {
                 />
               </label>
 
-              <button type="submit" className="submit-button" disabled={savingWeight}>
+              <button type="submit" disabled={savingWeight}>
                 {savingWeight ? "Guardando..." : "Guardar peso"}
               </button>
             </form>
 
             {weightError ? <p className="error-text">{weightError}</p> : null}
             {weightSuccess ? <p className="success-text">{weightSuccess}</p> : null}
-
-            <div className="weight-week-grid">
-              {stats.weeklyWeightDays.map((day) => (
-                <div key={day.date} className={`weight-day-card ${day.entry ? "has-weight" : ""}`}>
-                  <span>{formatShortDate(day.date)}</span>
-                  <strong>{day.entry ? `${day.entry.peso} kg` : "--"}</strong>
-                </div>
-              ))}
-            </div>
           </article>
 
-          <article className="card stat-card stat-wide">
-            <h3>Macros por día (semana actual)</h3>
-            <div className="macro-grid">
+          <article className="dashboard-card dashboard-macros-card">
+            <div className="dashboard-card-heading">
+              <h3>Macros por día</h3>
+              <span className="dashboard-period-pill">Semana actual</span>
+            </div>
+
+            <div className="dashboard-macro-grid">
               {stats.weekDays.map((date) => {
                 const day = stats.macrosByDate[date];
-                const total = day.proteinas + day.carbos + day.grasas;
-                const p = total ? clampPercent((day.proteinas / total) * 100) : 0;
-                const c = total ? clampPercent((day.carbos / total) * 100) : 0;
-                const g = total ? clampPercent((day.grasas / total) * 100) : 0;
+                const maxMacro = Math.max(day.proteinas, day.carbos, day.grasas, 1);
+                const isToday = date === todayIso;
+
                 return (
-                  <div key={date} className="macro-day">
+                  <div key={date} className={`dashboard-macro-day ${isToday ? "today" : ""}`}>
                     <strong>{formatShortDate(date)}</strong>
-                    <div className="macro-stack">
-                      <div className="macro-protein" style={{ width: `${p}%` }} />
-                      <div className="macro-carb" style={{ width: `${c}%` }} />
-                      <div className="macro-fat" style={{ width: `${g}%` }} />
+                    <div className="dashboard-macro-bars">
+                      <i>
+                        <span
+                          className="protein"
+                          style={{ width: `${clampPercent((day.proteinas / maxMacro) * 100)}%` }}
+                        />
+                      </i>
+                      <i>
+                        <span
+                          className="carbs"
+                          style={{ width: `${clampPercent((day.carbos / maxMacro) * 100)}%` }}
+                        />
+                      </i>
+                      <i>
+                        <span
+                          className="fats"
+                          style={{ width: `${clampPercent((day.grasas / maxMacro) * 100)}%` }}
+                        />
+                      </i>
                     </div>
                     <small>
-                      P {Math.round(day.proteinas)}g · C {Math.round(day.carbos)}g · G {Math.round(day.grasas)}g
+                      {Math.round(day.proteinas)}g · {Math.round(day.carbos)}g · {Math.round(day.grasas)}g
                     </small>
                   </div>
                 );
@@ -511,52 +571,74 @@ export default function HomePage() {
             </div>
           </article>
 
-          <article className="card stat-card">
-            <div className="streak-card-head">
-              <h3>Racha cumpliendo la dieta</h3>
-              <button
-                type="button"
-                className="secondary-action-button streak-calendar-trigger"
-                onClick={() => {
-                  setStreakMonthStart(currentMonthStart);
-                  setShowStreakCalendar(true);
-                }}
-              >
-                Ver calendario
-              </button>
+          <article className="dashboard-card dashboard-streak-card">
+            <div>
+              <div className="dashboard-card-heading">
+                <h3>Racha actual</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStreakMonthStart(currentMonthStart);
+                    setShowStreakCalendar(true);
+                  }}
+                >
+                  Ver calendario
+                </button>
+              </div>
+
+              <div className="dashboard-streak-main">
+                <span className={`streak-flame ${getFlameLevel(stats.streak)}`} aria-hidden="true">
+                  <StreakIcon />
+                </span>
+                <div>
+                  <strong>{stats.streak} días</strong>
+                  <p>Días seguidos cumplidos</p>
+                </div>
+              </div>
             </div>
-            <div className="streak-row">
-              <p className="stat-main">{stats.streak} días</p>
-              <span className={`streak-flame ${getFlameLevel(stats.streak)}`} aria-hidden="true">
-                <StreakIcon />
-              </span>
+
+            <div className="dashboard-adherence">
+              <div>
+                <h3>Adherencia semanal</h3>
+                <strong>{stats.adherence}%</strong>
+              </div>
+              <div className="home-progress-track">
+                <div className="home-progress-fill" style={{ width: `${stats.adherence}%` }} />
+              </div>
+              <p>Días cumplidos esta semana: {stats.completedDaysCount}/7.</p>
             </div>
-            <p className="stat-sub">Días seguidos marcados como cumplidos.</p>
           </article>
 
-          <article className="card stat-card">
-            <h3>Adherencia semanal</h3>
-            <p className="stat-main">{stats.adherence}%</p>
-            <p className="stat-sub">Días cumplidos esta semana: {stats.completedDaysCount}/7.</p>
-            <div className="home-progress-track">
-              <div className="home-progress-fill" style={{ width: `${stats.adherence}%` }} />
+          <article className="dashboard-card dashboard-checklist-card">
+            <div className="dashboard-card-heading">
+              <h3>Checklist de dieta (semana actual)</h3>
+              <span className="dashboard-check-icon" aria-hidden="true">✓</span>
             </div>
-          </article>
+            <div className="dashboard-compliance-grid">
+              {stats.weekDays.map((date) => {
+                const completed = Boolean(complianceByDate[date]);
+                const isToday = date === todayIso;
 
-          <article className="card stat-card stat-wide">
-            <h3>Checklist de dieta (semana actual)</h3>
-            <div className="compliance-grid">
-              {stats.weekDays.map((date) => (
-                <label key={date} className="compliance-item">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(complianceByDate[date])}
-                    disabled={isFutureDate(date, todayIso)}
-                    onChange={(event) => toggleCompliance(date, event.target.checked)}
-                  />
-                  <span>{formatShortDate(date)}</span>
-                </label>
-              ))}
+                return (
+                  <label
+                    key={date}
+                    className={`dashboard-compliance-item ${completed ? "completed" : ""} ${
+                      isToday ? "today" : ""
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={completed}
+                      disabled={isFutureDate(date, todayIso)}
+                      onChange={(event) => toggleCompliance(date, event.target.checked)}
+                    />
+                    <span>
+                      <strong>{formatShortDate(date)}</strong>
+                      <small>{formatWeekdayShort(date)}</small>
+                    </span>
+                  </label>
+                );
+              })}
             </div>
           </article>
         </section>

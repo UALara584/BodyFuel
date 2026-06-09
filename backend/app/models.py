@@ -24,6 +24,8 @@ class User(Base):
     tipo_dieta = Column(String)
     intolerancias = Column(JSON, default=list)
     calorias_objetivo = Column(Integer)
+    avatar = Column(Text)
+    profile_image = Column(Text)
 
     tracking_entries = relationship("Tracking", back_populates="user", cascade=CASCADE_DELETE)
     plans = relationship("WeeklyPlan", cascade=CASCADE_DELETE)

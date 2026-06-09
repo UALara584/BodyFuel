@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ProfileMenu from "../components/ProfileMenu";
+import { UserAvatar } from "../components/UserAvatar";
 import { deleteUserAccount, fetchUserById, updateUser } from "../services/api";
+import { createAvatarFromFile, PROFILE_AVATARS } from "../utils/avatar";
 
 const emptyProfile = {
   email: "",
@@ -19,6 +21,8 @@ const emptyProfile = {
   tipo_dieta: "",
   intolerancias: [],
   calorias_objetivo: "",
+  avatar: "initials",
+  profile_image: "",
 };
 
 const exampleProfile = {
@@ -34,6 +38,8 @@ const exampleProfile = {
   objetivo: "perder",
   tipo_dieta: "Mediterránea",
   intolerancias: ["lactosa"],
+  avatar: "preset:mint",
+  profile_image: "",
 };
 
 const activityOptions = [
@@ -104,16 +110,6 @@ function getAgeFromBirthDate(birthDate) {
   return age;
 }
 
-function getInitials(name) {
-  const parts = (name || "Usuario")
-    .trim()
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2);
-
-  return parts.map((part) => part[0]?.toUpperCase()).join("") || "U";
-}
-
 function createProfileFromUser(user = {}, useExampleDefaults = false) {
   const defaults = useExampleDefaults ? exampleProfile : {};
   const merged = { ...defaults, ...user };
@@ -150,6 +146,10 @@ function createProfileFromUser(user = {}, useExampleDefaults = false) {
       useExampleDefaults ? exampleProfile.intolerancias : []
     ),
     calorias_objetivo: merged.calorias_objetivo?.toString() || "",
+    avatar: merged.avatar || "initials",
+    profile_image:
+      merged.profile_image ||
+      (typeof merged.avatar === "string" && merged.avatar.startsWith("data:image/") ? merged.avatar : ""),
   };
 }
 
@@ -267,7 +267,11 @@ export default function ProfilePage({ mode = "summary" }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [avatarError, setAvatarError] = useState("");
+  const [avatarSuccess, setAvatarSuccess] = useState("");
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const [userId, setUserId] = useState(null);
+  const avatarFileInputRef = useRef(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -332,6 +336,94 @@ export default function ProfilePage({ mode = "summary" }) {
       ...prev,
       [name]: value,
     }));
+  }
+
+  function handleAvatarSelect(avatarId) {
+    setAvatarError("");
+    setAvatarSuccess("");
+    setProfile((prev) => ({
+      ...prev,
+      avatar: `preset:${avatarId}`,
+    }));
+  }
+
+  async function handleAvatarFileChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setAvatarError("");
+    setAvatarSuccess("");
+
+    try {
+      const avatar = await createAvatarFromFile(file);
+      setProfile((prev) => ({
+        ...prev,
+        avatar,
+        profile_image: avatar,
+      }));
+    } catch (err) {
+      setAvatarError(err.message);
+    }
+  }
+
+  function handleUseImage() {
+    setAvatarError("");
+    setAvatarSuccess("");
+
+    if (profile.profile_image) {
+      setProfile((prev) => ({ ...prev, avatar: prev.profile_image }));
+      return;
+    }
+
+    avatarFileInputRef.current?.click();
+  }
+
+  async function handleAvatarSave() {
+    setAvatarError("");
+    setAvatarSuccess("");
+
+    if (!userId) {
+      setAvatarError("No hay usuario activo para guardar la foto.");
+      return;
+    }
+
+    try {
+      setAvatarSaving(true);
+      const updatedUser = await updateUser(userId, {
+        avatar: profile.avatar || "initials",
+        profile_image: profile.profile_image || null,
+      });
+      let freshUser = updatedUser;
+
+      try {
+        freshUser = await fetchUserById(userId);
+      } catch {
+        freshUser = updatedUser;
+      }
+
+      const storedUser = JSON.parse(localStorage.getItem("bf_current_user") || "null") || {};
+      const currentUser = { ...storedUser, ...updatedUser, ...freshUser };
+      const savedAvatar = currentUser.avatar || "initials";
+      const savedImage = currentUser.profile_image || "";
+
+      persistCurrentUser(currentUser);
+      setProfile((prev) => ({
+        ...prev,
+        avatar: savedAvatar,
+        profile_image: savedImage,
+      }));
+      setSavedProfile((prev) => ({
+        ...prev,
+        avatar: savedAvatar,
+        profile_image: savedImage,
+      }));
+      setAvatarSuccess("Foto de perfil guardada correctamente.");
+    } catch (err) {
+      setAvatarError(err.message);
+    } finally {
+      setAvatarSaving(false);
+    }
   }
 
   async function handleSubmit(event) {
@@ -399,6 +491,8 @@ export default function ProfilePage({ mode = "summary" }) {
       objetivo: profile.objetivo,
       tipo_dieta: profile.tipo_dieta.trim() || null,
       intolerancias: currentIntolerances,
+      avatar: profile.avatar || "initials",
+      profile_image: profile.profile_image || null,
     };
 
     if (profile.calorias_objetivo !== "" && (caloriesEdited || !shouldRecalculateCalories)) {
@@ -540,9 +634,12 @@ export default function ProfilePage({ mode = "summary" }) {
           {!isEditPage ? (
           <section className="profile-nutrition-panel profile-overview-panel">
             <header className="nutrition-profile-header">
-              <div className="nutrition-avatar" aria-hidden="true">
-                {getInitials(profile.nombre)}
-              </div>
+              <UserAvatar
+                avatar={profile.avatar}
+                name={profile.nombre}
+                className="nutrition-avatar"
+                ariaLabel={`Avatar de ${profile.nombre || "usuario"}`}
+              />
 
               <div className="nutrition-profile-main">
                 <h3>{profile.nombre || "Usuario"}</h3>
@@ -669,6 +766,97 @@ export default function ProfilePage({ mode = "summary" }) {
           ) : (
       <section className="profile-data-panel profile-edit-side-panel profile-edit-page-panel">
               <form onSubmit={handleSubmit} className="profile-side-form" noValidate>
+                <section className="profile-form-section profile-avatar-form-section">
+                  <div className="profile-section-title">
+                    <h3>Foto de perfil</h3>
+                  </div>
+
+                  <div className="profile-avatar-editor">
+                    <UserAvatar
+                      avatar={profile.avatar}
+                      name={profile.nombre}
+                      className="profile-avatar-preview"
+                      ariaLabel="Vista previa de la foto de perfil"
+                    />
+
+                    <div className="profile-avatar-editor-copy">
+                      <strong>Elige cómo quieres aparecer</strong>
+                      <p>
+                        Usa uno de los avatares de BodyFuel o sube una foto desde tu dispositivo.
+                      </p>
+                      <div className="profile-avatar-actions">
+                        <button
+                          type="button"
+                          className={`secondary-action-button ${
+                            profile.avatar.startsWith("data:image/") ? "selected" : ""
+                          }`}
+                          onClick={handleUseImage}
+                          aria-pressed={profile.avatar.startsWith("data:image/")}
+                        >
+                          Utilizar imagen
+                        </button>
+                        {profile.profile_image ? (
+                          <button
+                            type="button"
+                            className="text-action-button"
+                            onClick={() => avatarFileInputRef.current?.click()}
+                          >
+                            Cambiar imagen
+                          </button>
+                        ) : null}
+                        <input
+                          ref={avatarFileInputRef}
+                          className="profile-avatar-file-input"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handleAvatarFileChange}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="profile-avatar-options" aria-label="Avatares disponibles">
+                    {PROFILE_AVATARS.map((avatar) => {
+                      const value = `preset:${avatar.id}`;
+                      const isSelected = profile.avatar === value;
+
+                      return (
+                        <button
+                          key={avatar.id}
+                          type="button"
+                          className={`profile-avatar-option ${isSelected ? "selected" : ""}`}
+                          onClick={() => handleAvatarSelect(avatar.id)}
+                          aria-pressed={isSelected}
+                          aria-label={`Elegir avatar ${avatar.label}`}
+                        >
+                          <UserAvatar
+                            avatar={value}
+                            name={profile.nombre}
+                            className="profile-avatar-option-image"
+                          />
+                          <span>{avatar.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="profile-avatar-save-row">
+                    <button
+                      type="button"
+                      className="profile-save-button"
+                      onClick={handleAvatarSave}
+                      disabled={avatarSaving}
+                    >
+                      {avatarSaving ? "Guardando foto..." : "Guardar foto de perfil"}
+                    </button>
+                    {avatarError || avatarSuccess ? (
+                      <p className={avatarError ? "error-text" : "success-text"}>
+                        {avatarError || avatarSuccess}
+                      </p>
+                    ) : null}
+                  </div>
+                </section>
+
                 <section className="profile-form-section">
                   <div className="profile-section-title">
                     <h3>Datos personales</h3>

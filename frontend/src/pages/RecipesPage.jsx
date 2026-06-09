@@ -1,5 +1,6 @@
 
 import { useEffect, useMemo, useState } from "react";
+import { UserAvatar } from "../components/UserAvatar";
 import {
   cloneRecipeToMyRecipes,
   createRecipeWithItems,
@@ -758,9 +759,11 @@ export default function RecipesPage() {
                   onClick={() => handleShareRecipe(conversation)}
                   disabled={sharingConversationId === conversation.id}
                 >
-                  <span className="chat-avatar">
-                    {(conversation.other_user.nombre || "U").slice(0, 2).toUpperCase()}
-                  </span>
+                  <UserAvatar
+                    avatar={conversation.other_user.avatar}
+                    name={conversation.other_user.nombre}
+                    className="chat-avatar"
+                  />
                   <span>
                     <strong>{conversation.other_user.nombre}</strong>
                     <small>

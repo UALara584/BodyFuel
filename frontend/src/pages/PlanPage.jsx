@@ -1,8 +1,10 @@
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { UserAvatar } from "../components/UserAvatar";
 import {
   clearPlan,
+  cloneSharedPlanToMyPlans,
   createMeal,
   createMealItem,
   createPlan,
@@ -82,6 +84,60 @@ function truncateScrapingRecipeName(name, maxLength = 28) {
   return `${cleanName.slice(0, maxLength).trim()}...`;
 }
 
+function addItemToPlan(currentPlan, day, hour, meal, item) {
+  if (!currentPlan) return currentPlan;
+
+  const meals = [...(currentPlan.meals || [])];
+  const mealIndex = meals.findIndex(
+    (entry) => normalizeDay(entry.dia) === day && entry.hora === hour
+  );
+
+  if (mealIndex === -1) {
+    meals.push({ ...meal, items: [item] });
+  } else {
+    meals[mealIndex] = {
+      ...meals[mealIndex],
+      items: [...(meals[mealIndex].items || []), item],
+    };
+  }
+
+  return { ...currentPlan, meals };
+}
+
+function confirmPlanItem(currentPlan, pendingMealId, pendingItemId, savedMeal, savedItem) {
+  if (!currentPlan) return currentPlan;
+
+  return {
+    ...currentPlan,
+    meals: (currentPlan.meals || []).map((meal) =>
+      meal.id === pendingMealId
+        ? {
+            ...meal,
+            id: savedMeal.id,
+            items: (meal.items || []).map((item) =>
+              item.id === pendingItemId ? savedItem : item
+            ),
+          }
+        : meal
+    ),
+  };
+}
+
+function removeItemFromPlan(currentPlan, itemId, removePendingMeal = false) {
+  if (!currentPlan) return currentPlan;
+
+  return {
+    ...currentPlan,
+    meals: (currentPlan.meals || []).flatMap((meal) => {
+      const items = (meal.items || []).filter((item) => item.id !== itemId);
+      if (removePendingMeal && items.length === 0 && String(meal.id).startsWith("pending-meal-")) {
+        return [];
+      }
+      return [{ ...meal, items }];
+    }),
+  };
+}
+
 export default function PlanPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -90,12 +146,11 @@ export default function PlanPage() {
   const [foods, setFoods] = useState([]);
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dropping, setDropping] = useState(false);
   const [error, setError] = useState("");
   const [activeDropDay, setActiveDropDay] = useState("");
   const [activeDropHour, setActiveDropHour] = useState("");
 
-  const [showFoods, setShowFoods] = useState(false);
+  const [showFoods, setShowFoods] = useState(true);
   const [showRecipes, setShowRecipes] = useState(false);
   const [showManualRecipes, setShowManualRecipes] = useState(false);
   const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
@@ -116,6 +171,7 @@ export default function PlanPage() {
   const [planActionSuccess, setPlanActionSuccess] = useState("");
   const [planPendingDelete, setPlanPendingDelete] = useState(null);
   const [showClearPlan, setShowClearPlan] = useState(false);
+  const pendingItemCounterRef = useRef(0);
 
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id;
@@ -127,6 +183,18 @@ export default function PlanPage() {
     : null;
   const weekStart = weekFromQuery || getCurrentWeekMonday();
   const isReadOnlySharedPlan = Boolean(sharedPlanId && plan?.user_id !== userId);
+
+  function updateCurrentPlan(updater) {
+    const currentPlanId = plan?.id;
+    if (!currentPlanId) return;
+
+    setPlan((current) => (current?.id === currentPlanId ? updater(current) : current));
+    setSavedPlans((current) =>
+      current.map((savedPlan) =>
+        savedPlan.id === currentPlanId ? updater(savedPlan) : savedPlan
+      )
+    );
+  }
 
   async function loadPlanAndLibrary() {
     setLoading(true);
@@ -243,12 +311,56 @@ export default function PlanPage() {
       return;
     }
 
-    try {
-      setDropping(true);
+    let pendingItemId = "";
+    let existingMeal = null;
 
+    try {
       const mealType = guessMealType(hour);
-      const existingMeal = (mealsByDay[day] || []).find(
+      existingMeal = (mealsByDay[day] || []).find(
         (meal) => meal.hora === hour && normalizeDay(meal.dia) === day
+      );
+      pendingItemCounterRef.current += 1;
+      const pendingToken = `${plan.id}-${pendingItemCounterRef.current}`;
+      const pendingMealId = existingMeal?.id || `pending-meal-${pendingToken}`;
+      pendingItemId = `pending-item-${pendingToken}`;
+      const selectedFood =
+        dragged.kind === "food"
+          ? foods.find((food) => food.id === dragged.id) || {
+              id: dragged.id,
+              nombre: dragged.nombre,
+            }
+          : null;
+      const selectedRecipe =
+        dragged.kind === "recipe"
+          ? recipes.find((recipe) => recipe.id === dragged.id) || {
+              id: dragged.id,
+              nombre: dragged.nombre,
+            }
+          : null;
+      const pendingMeal = existingMeal || {
+        id: pendingMealId,
+        weekly_plan_id: plan.id,
+        dia: day,
+        tipo_comida: mealType,
+        hora: hour,
+      };
+      const pendingItem = {
+        id: pendingItemId,
+        meal_id: pendingMealId,
+        food_id: selectedFood?.id || null,
+        recipe_id: selectedRecipe?.id || null,
+        cantidad: 1,
+        notas:
+          dragged.kind === "food"
+            ? "Añadido desde calendario"
+            : "Receta añadida desde calendario",
+        food: selectedFood,
+        recipe: selectedRecipe,
+        pending: true,
+      };
+
+      updateCurrentPlan((current) =>
+        addItemToPlan(current, day, hour, pendingMeal, pendingItem)
       );
 
       const meal = existingMeal
@@ -260,22 +372,29 @@ export default function PlanPage() {
             hora: hour,
           });
 
-      await createMealItem({
+      const createdItem = await createMealItem({
         meal_id: meal.id,
-        food_id: dragged.kind === "food" ? dragged.id : null,
-        recipe_id: dragged.kind === "recipe" ? dragged.id : null,
+        food_id: selectedFood?.id || null,
+        recipe_id: selectedRecipe?.id || null,
         cantidad: 1,
-        notas:
-          dragged.kind === "food"
-            ? "Añadido desde calendario"
-            : "Receta añadida desde calendario",
+        notas: pendingItem.notas,
       });
 
-      await loadPlanAndLibrary();
+      updateCurrentPlan((current) =>
+        confirmPlanItem(current, pendingMealId, pendingItemId, meal, {
+          ...createdItem,
+          food: selectedFood,
+          recipe: selectedRecipe,
+          pending: false,
+        })
+      );
     } catch (err) {
+      if (pendingItemId) {
+        updateCurrentPlan((current) =>
+          removeItemFromPlan(current, pendingItemId, !existingMeal)
+        );
+      }
       setError(err.message);
-    } finally {
-      setDropping(false);
     }
   }
 
@@ -287,11 +406,26 @@ export default function PlanPage() {
   async function handleDeleteItem(itemId) {
     if (isReadOnlySharedPlan) return;
 
+    const sourceMeal = (plan?.meals || []).find((meal) =>
+      (meal.items || []).some((item) => item.id === itemId)
+    );
+    const sourceItem = sourceMeal?.items?.find((item) => item.id === itemId);
+    if (!sourceMeal || !sourceItem || sourceItem.pending) return;
+
     try {
       setError("");
+      updateCurrentPlan((current) => removeItemFromPlan(current, itemId));
       await deleteMealItem(itemId);
-      await loadPlanAndLibrary();
     } catch (err) {
+      updateCurrentPlan((current) =>
+        addItemToPlan(
+          current,
+          normalizeDay(sourceMeal.dia),
+          sourceMeal.hora,
+          sourceMeal,
+          sourceItem
+        )
+      );
       setError(err.message);
     }
   }
@@ -391,6 +525,25 @@ export default function PlanPage() {
     }
   }
 
+  async function handleSaveSharedPlan() {
+    if (!plan || !sharedPlanId || !isReadOnlySharedPlan) return;
+
+    try {
+      setPlanActionLoading("clone");
+      setPlanActionError("");
+      setPlanActionSuccess("");
+      const savedPlan = await cloneSharedPlanToMyPlans(sharedPlanId, userId);
+      setPlanActionSuccess(
+        `Plan guardado en la semana del ${formatPlanWeek(savedPlan.semana_inicio)}.`
+      );
+      navigate(`/plan?week=${savedPlan.semana_inicio}`, { replace: true });
+    } catch (err) {
+      setPlanActionError(err.message || "No se pudo guardar el plan compartido.");
+    } finally {
+      setPlanActionLoading("");
+    }
+  }
+
   async function handleRenamePlan(event) {
     event.preventDefault();
     const nombre = planNameDraft.trim();
@@ -472,28 +625,30 @@ export default function PlanPage() {
   }
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
+    <div className="page plan-page">
+      <div className="page-header plan-workspace-header">
+        <div className="plan-title-group">
           <h2>
             {isReadOnlySharedPlan
               ? plan?.nombre || "Plan semanal compartido"
               : plan?.nombre || "Planes semanales"}
           </h2>
-          <p>
+          {plan ? <span className="plan-active-badge">Plan activo</span> : null}
+          <p className="plan-header-description">
             {isReadOnlySharedPlan
               ? "Puedes consultar este plan, pero solo su propietario puede modificarlo."
               : "Guarda, organiza y reutiliza tus planes semanales desde un mismo lugar."}
           </p>
         </div>
         <div className="plan-header-actions">
-          {!isReadOnlySharedPlan ? (
+          {isReadOnlySharedPlan && plan ? (
             <button
               type="button"
               className="plan-action-button plan-action-button-primary"
-              onClick={openCreatePlanModal}
+              onClick={handleSaveSharedPlan}
+              disabled={planActionLoading === "clone"}
             >
-              Nuevo plan
+              {planActionLoading === "clone" ? "Guardando..." : "Guardar plan"}
             </button>
           ) : null}
           {!isReadOnlySharedPlan && plan ? (
@@ -546,9 +701,10 @@ export default function PlanPage() {
             </div>
             <button
               type="button"
-              className="secondary-action-button"
+              className="secondary-action-button saved-plan-create-button"
               onClick={openCreatePlanModal}
             >
+              <span aria-hidden="true">+</span>
               Crear plan
             </button>
           </div>
@@ -562,15 +718,29 @@ export default function PlanPage() {
                   key={savedPlan.id}
                   className={`saved-plan-item ${plan?.id === savedPlan.id ? "active" : ""}`}
                 >
+                  <span className="saved-plan-status" aria-hidden="true">
+                    {plan?.id === savedPlan.id ? "✓" : "↶"}
+                  </span>
                   <button
                     type="button"
                     className="saved-plan-open"
                     onClick={() => navigate(`/plan?week=${savedPlan.semana_inicio}`)}
                   >
                     <strong>{savedPlan.nombre || "Plan semanal"}</strong>
-                    <span>{formatPlanWeek(savedPlan.semana_inicio)}</span>
-                    <small>{savedPlan.meals?.length || 0} comidas</small>
+                    <span className="saved-plan-meta">
+                      <span>{formatPlanWeek(savedPlan.semana_inicio)}</span>
+                      <small>{savedPlan.meals?.length || 0} comidas</small>
+                    </span>
                   </button>
+                  {plan?.id !== savedPlan.id ? (
+                    <button
+                      type="button"
+                      className="saved-plan-load"
+                      onClick={() => navigate(`/plan?week=${savedPlan.semana_inicio}`)}
+                    >
+                      Cargar
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="saved-plan-delete"
@@ -801,9 +971,12 @@ export default function PlanPage() {
                       }
                     >
                       {meal?.items?.map((item) => (
-                        <div key={item.id} className="week-pill">
+                        <div
+                          key={item.id}
+                          className={`week-pill ${item.pending ? "week-pill-pending" : ""}`}
+                        >
                           <span>{item.food?.nombre || item.recipe?.nombre}</span>
-                          {!isReadOnlySharedPlan ? (
+                          {!isReadOnlySharedPlan && !item.pending ? (
                             <button
                               type="button"
                               className="week-pill-delete"
@@ -827,7 +1000,6 @@ export default function PlanPage() {
         </section>
           </section>
 
-          {dropping && !isReadOnlySharedPlan ? <p>Guardando en el plan...</p> : null}
         </>
       ) : !sharedPlanId ? (
         <section className="card plan-empty-state">
@@ -1021,9 +1193,11 @@ export default function PlanPage() {
                   onClick={() => handleSharePlan(conversation)}
                   disabled={sharingConversationId === conversation.id}
                 >
-                  <span className="chat-avatar">
-                    {(conversation.other_user.nombre || "U").slice(0, 2).toUpperCase()}
-                  </span>
+                  <UserAvatar
+                    avatar={conversation.other_user.avatar}
+                    name={conversation.other_user.nombre}
+                    className="chat-avatar"
+                  />
                   <span>
                     <strong>{conversation.other_user.nombre}</strong>
                     <small>

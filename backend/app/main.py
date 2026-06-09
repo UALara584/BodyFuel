@@ -166,6 +166,19 @@ def ensure_user_nutrition_columns() -> None:
         connection.execute(text("UPDATE users SET nivel_actividad = COALESCE(nivel_actividad, 3)"))
         connection.execute(text("UPDATE users SET intolerancias = COALESCE(intolerancias, '[]'::jsonb)"))
 
+
+def ensure_user_avatar_column() -> None:
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT"))
+        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image TEXT"))
+        connection.execute(
+            text(
+                "UPDATE users SET profile_image = avatar "
+                "WHERE profile_image IS NULL AND avatar LIKE 'data:image/%'"
+            )
+        )
+
+
 def ensure_food_user_column() -> None:
     with engine.begin() as connection:
         connection.execute(
@@ -370,6 +383,7 @@ def initialize_database(retries: int = 20, delay: int = 3) -> None:
             Base.metadata.create_all(bind=engine)
             ensure_user_auth_columns()
             ensure_user_nutrition_columns()
+            ensure_user_avatar_column()
             ensure_recipe_macro_columns()
             ensure_weekly_plan_name_column()
             ensure_default_foods()
@@ -394,6 +408,7 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 ensure_user_auth_columns()
 ensure_user_nutrition_columns()
+ensure_user_avatar_column()
 ensure_recipe_macro_columns()
 ensure_food_user_column()
 ensure_weekly_plan_name_column()

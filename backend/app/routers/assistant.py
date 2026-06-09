@@ -7,7 +7,8 @@ import unicodedata
 from datetime import datetime
 from difflib import SequenceMatcher
 from typing import Annotated, Iterable
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, Depends
@@ -298,7 +299,17 @@ def ask_external_llm(
     api_key = os.getenv("LLM_API_KEY", "").strip()
     model = os.getenv("LLM_MODEL", "gpt-4o-mini").strip()
 
-    if not api_url or not api_key:
+    placeholder_values = {
+        "tu_url_aqui",
+        "tu_api_key_aqui",
+        "your_url_here",
+        "your_api_key_here",
+    }
+    parsed_url = urlparse(api_url)
+    has_valid_url = parsed_url.scheme in {"http", "https"} and bool(parsed_url.netloc)
+    has_placeholder = api_url.lower() in placeholder_values or api_key.lower() in placeholder_values
+
+    if not api_url or not api_key or not has_valid_url or has_placeholder:
         return None
 
     system_prompt = (
@@ -328,17 +339,16 @@ def ask_external_llm(
         "temperature": 0.2,
     }
 
-    request = Request(
-        url=api_url,
-        method="POST",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-    )
-
     try:
+        request = Request(
+            url=api_url,
+            method="POST",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+        )
         with urlopen(request, timeout=20) as response:
             data = json.loads(response.read().decode("utf-8"))
             content = (
@@ -348,7 +358,16 @@ def ask_external_llm(
                 .strip()
             )
             return content or None
-    except (URLError, TimeoutError, json.JSONDecodeError, KeyError, IndexError):
+    except (
+        HTTPError,
+        URLError,
+        TimeoutError,
+        ValueError,
+        OSError,
+        json.JSONDecodeError,
+        KeyError,
+        IndexError,
+    ):
         return None
 
 

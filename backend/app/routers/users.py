@@ -176,6 +176,8 @@ def update_user(user_id: int, data: UserUpdate, db: Annotated[Session, Depends(g
         "tipo_dieta",
         "intolerancias",
         "calorias_objetivo",
+        "avatar",
+        "profile_image",
     ]
 
     has_manual_calories = "calorias_objetivo" in update_data

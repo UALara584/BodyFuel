@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
@@ -5,6 +7,7 @@ from ..database import SessionLocal
 from ..models import ChatMessage, ChatParticipant, WeeklyPlan, User, Meal, MealItem
 from ..schemas import (
     WeeklyPlanCreate,
+    WeeklyPlanCloneRequest,
     WeeklyPlanFullResponse,
     WeeklyPlanResponse,
     WeeklyPlanUpdate,
@@ -21,31 +24,11 @@ def get_db():
         db.close()
 
 
-@router.post("/", response_model=WeeklyPlanResponse)
-def create_plan(data: WeeklyPlanCreate, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == data.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
-    existing_plan = db.query(WeeklyPlan).filter(
-        WeeklyPlan.user_id == data.user_id,
-        WeeklyPlan.semana_inicio == data.semana_inicio
-    ).first()
-
-    if existing_plan:
-        raise HTTPException(status_code=400, detail="Ya existe un plan para esa semana")
-
-    plan_data = data.model_dump()
-    plan_data["nombre"] = data.nombre.strip()
-    new_plan = WeeklyPlan(**plan_data)
-    db.add(new_plan)
-    db.commit()
-    db.refresh(new_plan)
-    return new_plan
-
-
-@router.get("/shared/{plan_id}/full", response_model=WeeklyPlanFullResponse)
-def get_shared_full_plan(plan_id: int, user_id: int, db: Session = Depends(get_db)):
+def get_shared_plan_for_user(
+    db: Session,
+    plan_id: int,
+    user_id: int,
+) -> WeeklyPlan:
     shared_message = (
         db.query(ChatMessage.id)
         .join(
@@ -81,6 +64,104 @@ def get_shared_full_plan(plan_id: int, user_id: int, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
     return plan
+
+
+@router.post("/", response_model=WeeklyPlanResponse)
+def create_plan(data: WeeklyPlanCreate, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    existing_plan = db.query(WeeklyPlan).filter(
+        WeeklyPlan.user_id == data.user_id,
+        WeeklyPlan.semana_inicio == data.semana_inicio
+    ).first()
+
+    if existing_plan:
+        raise HTTPException(status_code=400, detail="Ya existe un plan para esa semana")
+
+    plan_data = data.model_dump()
+    plan_data["nombre"] = data.nombre.strip()
+    new_plan = WeeklyPlan(**plan_data)
+    db.add(new_plan)
+    db.commit()
+    db.refresh(new_plan)
+    return new_plan
+
+
+@router.get("/shared/{plan_id}/full", response_model=WeeklyPlanFullResponse)
+def get_shared_full_plan(plan_id: int, user_id: int, db: Session = Depends(get_db)):
+    return get_shared_plan_for_user(db, plan_id, user_id)
+
+
+@router.post("/shared/{plan_id}/clone", response_model=WeeklyPlanFullResponse)
+def clone_shared_plan(
+    plan_id: int,
+    payload: WeeklyPlanCloneRequest,
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    source_plan = get_shared_plan_for_user(db, plan_id, payload.user_id)
+    if source_plan.user_id == payload.user_id:
+        raise HTTPException(status_code=400, detail="Este plan ya pertenece a tu cuenta")
+
+    target_week = source_plan.semana_inicio
+    used_weeks = {
+        row[0]
+        for row in db.query(WeeklyPlan.semana_inicio)
+        .filter(WeeklyPlan.user_id == payload.user_id)
+        .all()
+    }
+    while target_week in used_weeks:
+        target_week += timedelta(days=7)
+
+    cloned_plan = WeeklyPlan(
+        user_id=payload.user_id,
+        nombre=source_plan.nombre,
+        semana_inicio=target_week,
+    )
+    db.add(cloned_plan)
+    db.flush()
+
+    for source_meal in source_plan.meals:
+        cloned_meal = Meal(
+            weekly_plan_id=cloned_plan.id,
+            dia=source_meal.dia,
+            tipo_comida=source_meal.tipo_comida,
+            hora=source_meal.hora,
+        )
+        db.add(cloned_meal)
+        db.flush()
+
+        for source_item in source_meal.items:
+            db.add(
+                MealItem(
+                    meal_id=cloned_meal.id,
+                    food_id=source_item.food_id,
+                    recipe_id=source_item.recipe_id,
+                    cantidad=source_item.cantidad,
+                    notas=source_item.notas,
+                )
+            )
+
+    db.commit()
+
+    return (
+        db.query(WeeklyPlan)
+        .options(
+            joinedload(WeeklyPlan.meals)
+            .joinedload(Meal.items)
+            .joinedload(MealItem.food),
+            joinedload(WeeklyPlan.meals)
+            .joinedload(Meal.items)
+            .joinedload(MealItem.recipe),
+        )
+        .filter(WeeklyPlan.id == cloned_plan.id)
+        .first()
+    )
 
 
 @router.put("/{plan_id}", response_model=WeeklyPlanResponse)

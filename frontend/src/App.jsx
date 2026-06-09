@@ -11,6 +11,7 @@ import AssistantPage from "./pages/AssistantPage";
 import ChatsPage from "./pages/ChatsPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import { UserAvatar } from "./components/UserAvatar";
 import { useEffect, useState } from "react";
 import { fetchUserById } from "./services/api";
 import { fetchChatConversations } from "./services/chatApi";
@@ -67,6 +68,12 @@ function NavIcon({ name }) {
         <path d="M4.6 20.2a7.8 7.8 0 0 1 14.8 0" />
       </>
     ),
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3.1" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+      </>
+    ),
   };
 
   return (
@@ -96,14 +103,18 @@ function NavLinkItem({ to, icon, children, badgeCount = 0 }) {
     "/profile",
     "/profile/edit",
     "/friends",
-    "/settings",
     "/progress",
     "/profile/friends",
-    "/profile/settings",
     "/profile/progress",
   ].includes(location.pathname);
   const isChatArea = to === "/chats" && location.pathname.startsWith("/chats");
-  const isActive = location.pathname === to || (to === "/profile" && isProfileArea) || isChatArea;
+  const isSettingsArea =
+    to === "/settings" && ["/settings", "/profile/settings"].includes(location.pathname);
+  const isActive =
+    location.pathname === to ||
+    (to === "/profile" && isProfileArea) ||
+    isSettingsArea ||
+    isChatArea;
   const visibleBadge = Number(badgeCount || 0);
 
   return (
@@ -232,32 +243,69 @@ function AppLayout() {
 
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <div className="app-header-inner">
-          <div className="brand-lockup">
-            <div className="brand-mark">
-              <BrandMark />
-            </div>
-            <div className="brand-copy">
-              <p className="brand-kicker">Nutrición y rendimiento</p>
-              <h1>BodyFuel</h1>
-              <p>Planificación inteligente para comer, entrenar y progresar mejor.</p>
-            </div>
-          </div>
+      <aside className="app-sidebar">
+        <Link to="/home" className="sidebar-brand">
+          <span>BodyFuel</span>
+          <small>Nutrición y rendimiento</small>
+        </Link>
 
-          <div className="header-actions">
-            <span className="header-user">Hola, {userName}</span>
-            <button type="button" className="logout-button" onClick={handleLogout}>
-              Cerrar sesión
-            </button>
-          </div>
+        <nav className="sidebar-nav" aria-label="Navegación principal">
+          <NavLinkItem to="/home" icon="home">Inicio</NavLinkItem>
+          <NavLinkItem to="/foods" icon="foods">Alimentos</NavLinkItem>
+          <NavLinkItem to="/recipes" icon="recipes">Recetas</NavLinkItem>
+          <NavLinkItem to="/chats" icon="chats" badgeCount={chatUnreadCount}>Chats</NavLinkItem>
+          <NavLinkItem to="/assistant" icon="assistant">Asistente IA</NavLinkItem>
+          <NavLinkItem to="/plan" icon="plan">Plan semanal</NavLinkItem>
+          <NavLinkItem to="/profile" icon="profile">Mi perfil</NavLinkItem>
+        </nav>
+
+        <div className="sidebar-secondary-nav">
+          <NavLinkItem to="/settings" icon="settings">Ajustes</NavLinkItem>
         </div>
-      </header>
+      </aside>
 
-      <div className={`app-layout ${isProfileArea ? "app-layout-profile" : ""}`}>
-        <main className="app-content">
-          <Outlet />
-        </main>
+      <div className="app-main">
+        <header className="app-header">
+          <div className="app-header-inner">
+            <Link to="/home" className="mobile-brand" aria-label="Ir al inicio">
+              <BrandMark />
+              <span>BodyFuel</span>
+            </Link>
+
+            <p className="header-greeting">
+              Buenos días, <strong>{userName}</strong>
+            </p>
+
+            <div className="header-actions">
+              <span className="header-user">Hola, {userName}</span>
+              <button type="button" className="logout-button" onClick={handleLogout}>
+                Cerrar sesión
+              </button>
+              <Link to="/profile" className="header-avatar" aria-label="Abrir mi perfil">
+                <UserAvatar
+                  avatar={currentUser?.avatar}
+                  name={userName}
+                  className="header-avatar-image"
+                />
+              </Link>
+            </div>
+          </div>
+        </header>
+
+        <div className={`app-layout ${isProfileArea ? "app-layout-profile" : ""}`}>
+          <main className="app-content">
+            <Outlet />
+          </main>
+        </div>
+
+        <footer className="app-footer">
+          <p>© {new Date().getFullYear()} BodyFuel. Todos los derechos reservados.</p>
+          <div>
+            <Link to="/settings">Privacidad</Link>
+            <Link to="/settings">Términos</Link>
+            <Link to="/assistant">Contacto</Link>
+          </div>
+        </footer>
       </div>
 
       <nav className="bottom-nav">

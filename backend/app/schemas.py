@@ -17,6 +17,8 @@ class UserCreate(BaseModel):
     tipo_dieta: str | None = None
     intolerancias: list[str] = Field(default_factory=list)
     calorias_objetivo: int | None = None
+    avatar: str | None = Field(default=None, max_length=750_000)
+    profile_image: str | None = Field(default=None, max_length=750_000)
 
 
 class UserUpdate(BaseModel):
@@ -34,6 +36,8 @@ class UserUpdate(BaseModel):
     tipo_dieta: str | None = None
     intolerancias: list[str] | None = None
     calorias_objetivo: int | None = None
+    avatar: str | None = Field(default=None, max_length=750_000)
+    profile_image: str | None = Field(default=None, max_length=750_000)
 
 
 class UserDeleteConfirm(BaseModel):
@@ -126,6 +130,10 @@ class WeeklyPlanCreate(BaseModel):
 class WeeklyPlanUpdate(BaseModel):
     user_id: int
     nombre: str = Field(min_length=1, max_length=120)
+
+
+class WeeklyPlanCloneRequest(BaseModel):
+    user_id: int
 
 
 class WeeklyPlanResponse(WeeklyPlanCreate):
@@ -267,6 +275,7 @@ class FriendUser(BaseModel):
     id: int
     nombre: str
     email: str
+    avatar: str | None = None
 
     class Config:
         from_attributes = True
