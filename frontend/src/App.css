@@ -61,6 +61,10 @@ html[data-theme="dark"] {
   --nav-bg: rgba(23, 31, 51, 0.97);
 }
 
+html[data-chat-badges="hidden"] .nav-badge {
+  display: none;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -3047,7 +3051,37 @@ a {
   width: 18px;
   height: 18px;
   margin: 0;
+  flex: none;
   accent-color: var(--primary);
+}
+
+.settings-section-head {
+  display: grid;
+  gap: 5px;
+}
+
+.settings-section-head p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.settings-switch-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.settings-switch-copy strong {
+  color: var(--text);
+  font-size: 0.94rem;
+}
+
+.settings-switch-copy small {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .progress-main-column {

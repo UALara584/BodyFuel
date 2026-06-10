@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ProfileMenu from "../components/ProfileMenu";
 import { getStoredAppSettings, saveAppSettings } from "../utils/appSettings";
 
@@ -16,14 +16,16 @@ export default function SettingsPage() {
     setSaved(true);
   }
 
+  useEffect(() => {
+    if (!saved) return undefined;
+
+    const timerId = window.setTimeout(() => setSaved(false), 1800);
+    return () => window.clearTimeout(timerId);
+  }, [saved, settings]);
+
   function handleCheckboxChange(event) {
     const { name, checked } = event.target;
     updateSettings({ [name]: checked });
-  }
-
-  function handleSelectChange(event) {
-    const { name, value } = event.target;
-    updateSettings({ [name]: value });
   }
 
   return (
@@ -62,36 +64,22 @@ export default function SettingsPage() {
 
           <section className="settings-panel">
             <div className="settings-section-head">
-              <h3>Preferencias</h3>
+              <h3>Navegación</h3>
+              <p>Decide si quieres ver los mensajes pendientes en el menú.</p>
             </div>
 
             <div className="settings-form-grid">
-              <label className="field-group">
-                <span>Unidades</span>
-                <select name="units" value={settings.units} onChange={handleSelectChange}>
-                  <option value="metric">Métricas</option>
-                  <option value="imperial">Imperiales</option>
-                </select>
-              </label>
-
               <label className="settings-switch">
                 <input
                   type="checkbox"
-                  name="weeklyReminders"
-                  checked={settings.weeklyReminders}
+                  name="chatBadges"
+                  checked={settings.chatBadges}
                   onChange={handleCheckboxChange}
                 />
-                <span>Recordatorios semanales</span>
-              </label>
-
-              <label className="settings-switch">
-                <input
-                  type="checkbox"
-                  name="assistantPersonalization"
-                  checked={settings.assistantPersonalization}
-                  onChange={handleCheckboxChange}
-                />
-                <span>Asistente personalizado</span>
+                <span className="settings-switch-copy">
+                  <strong>Mensajes sin leer</strong>
+                  <small>Muestra el número de mensajes sin leer en la navegación.</small>
+                </span>
               </label>
             </div>
           </section>

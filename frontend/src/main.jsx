@@ -3,9 +3,9 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "./App.css";
-import { applyTheme, getStoredAppSettings } from "./utils/appSettings";
+import { applyAppSettings, getStoredAppSettings } from "./utils/appSettings";
 
-applyTheme(getStoredAppSettings().theme);
+applyAppSettings(getStoredAppSettings());
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
