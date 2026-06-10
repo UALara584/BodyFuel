@@ -12,6 +12,72 @@ import {
   sendChatMessage,
 } from "../services/chatApi";
 
+function ChatIcon({ name, className = "" }) {
+  const icons = {
+    add: (
+      <>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="3.5" y="5.5" width="17" height="15" rx="2.5" />
+        <path d="M7.5 3.5v4" />
+        <path d="M16.5 3.5v4" />
+        <path d="M3.5 10h17" />
+        <path d="M8 14h2" />
+        <path d="M14 14h2" />
+        <path d="M8 17.5h2" />
+      </>
+    ),
+    chat: (
+      <>
+        <path d="M5.5 5.5h13a3 3 0 0 1 3 3v6.5a3 3 0 0 1-3 3H11l-5.5 3v-3.1a3 3 0 0 1-3-2.9V8.5a3 3 0 0 1 3-3Z" />
+        <path d="M7.5 10h9" />
+        <path d="M7.5 13.5h5.5" />
+      </>
+    ),
+    search: (
+      <>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m15.5 15.5 5 5" />
+      </>
+    ),
+    send: (
+      <>
+        <path d="m3.5 4.5 17 7.5-17 7.5 2.4-6.2L15 12l-9.1-1.3Z" />
+      </>
+    ),
+    utensils: (
+      <>
+        <path d="M7 3.5v7" />
+        <path d="M4.5 3.5v4.8A2.5 2.5 0 0 0 7 10.8a2.5 2.5 0 0 0 2.5-2.5V3.5" />
+        <path d="M7 10.8v9.7" />
+        <path d="M16.5 3.5c-2.1 1.2-3.2 3.3-3.2 6.2v2.1h3.2v8.7" />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      className={`chat-icon ${className}`.trim()}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <g
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      >
+        {icons[name]}
+      </g>
+    </svg>
+  );
+}
+
 function formatChatDate(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -23,6 +89,29 @@ function formatChatDate(value) {
   }
 
   return date.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
+}
+
+function getMessageDayKey(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function formatMessageDay(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return "Hoy";
+  if (date.toDateString() === yesterday.toDateString()) return "Ayer";
+
+  return date.toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "long",
+  });
 }
 
 function formatPlanRange(plan) {
@@ -143,6 +232,7 @@ export default function ChatsPage() {
   const [error, setError] = useState("");
   const [messagesError, setMessagesError] = useState("");
   const [messageText, setMessageText] = useState("");
+  const [conversationQuery, setConversationQuery] = useState("");
 
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [userQuery, setUserQuery] = useState("");
@@ -160,6 +250,17 @@ export default function ChatsPage() {
     () => conversations.find((conversation) => conversation.id === activeConversationId) || null,
     [conversations, activeConversationId]
   );
+
+  const filteredConversations = useMemo(() => {
+    const query = conversationQuery.trim().toLocaleLowerCase("es");
+    if (!query) return conversations;
+
+    return conversations.filter((conversation) => {
+      const name = conversation.other_user?.nombre || "";
+      const preview = getMessagePreview(conversation.last_message);
+      return `${name} ${preview}`.toLocaleLowerCase("es").includes(query);
+    });
+  }, [conversationQuery, conversations]);
 
   async function loadConversations() {
     if (!userId) return;
@@ -318,6 +419,13 @@ export default function ChatsPage() {
         key={message.id}
         className={`chat-message-row ${isMine ? "chat-message-row-mine" : "chat-message-row-other"}`}
       >
+        {!isMine ? (
+          <UserAvatar
+            avatar={message.sender?.avatar}
+            name={message.sender?.nombre}
+            className="chat-message-avatar"
+          />
+        ) : null}
         <div className={`chat-message-bubble ${isMine ? "mine" : "other"}`}>
           {!isMine ? <span className="chat-message-author">{message.sender?.nombre}</span> : null}
           {message.message_type === "text" ? (
@@ -341,43 +449,56 @@ export default function ChatsPage() {
           )}
           <small>{formatChatDate(message.created_at)}</small>
         </div>
+        {isMine ? (
+          <UserAvatar
+            avatar={currentUser?.avatar}
+            name={currentUser?.nombre}
+            className="chat-message-avatar"
+          />
+        ) : null}
       </div>
     );
   }
 
   return (
     <div className="page chats-page">
-      <div className="page-header page-header-row">
+      <div className="chats-page-header">
+        <div className="chats-page-mark">
+          <ChatIcon name="chat" />
+        </div>
         <div>
           <h2>Chats</h2>
-          <p>Habla con otros usuarios y comparte recetas o planes semanales.</p>
+          <p>Comunidad y soporte en tiempo real</p>
         </div>
-        <button
-          className="add-button"
-          type="button"
-          onClick={() => setShowNewConversation(true)}
-          aria-label="Iniciar chat"
-        >
-          +
-        </button>
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
 
       <section className={`chats-layout ${activeConversationId ? "has-active-chat" : ""}`}>
-        <aside className="card chats-list-panel">
+        <aside className="chats-list-panel">
           <div className="chats-list-header">
             <h3>Conversaciones</h3>
             <button
               type="button"
-              className="secondary-action-button"
+              className="chat-new-button"
               onClick={() => setShowNewConversation(true)}
             >
+              <ChatIcon name="add" />
               Nuevo chat
             </button>
+            <label className="chat-search-field">
+              <ChatIcon name="search" />
+              <input
+                type="search"
+                value={conversationQuery}
+                onChange={(event) => setConversationQuery(event.target.value)}
+                placeholder="Buscar mensajes..."
+                aria-label="Buscar conversaciones"
+              />
+            </label>
           </div>
 
-          {conversationLoading ? <p>Cargando conversaciones...</p> : null}
+          {conversationLoading ? <p className="chat-panel-note">Cargando conversaciones...</p> : null}
 
           {!conversationLoading && conversations.length === 0 ? (
             <div className="chat-empty-state">
@@ -387,7 +508,12 @@ export default function ChatsPage() {
           ) : null}
 
           <div className="chat-conversation-list">
-            {conversations.map((conversation) => (
+            {!conversationLoading &&
+            conversations.length > 0 &&
+            filteredConversations.length === 0 ? (
+              <p className="chat-panel-note">No hay conversaciones que coincidan.</p>
+            ) : null}
+            {filteredConversations.map((conversation) => (
               <button
                 key={conversation.id}
                 type="button"
@@ -416,11 +542,21 @@ export default function ChatsPage() {
           </div>
         </aside>
 
-        <section className="card chat-thread-panel">
+        <section className="chat-thread-panel">
           {!activeConversationId ? (
             <div className="chat-thread-empty">
+              <span className="chat-thread-empty-icon">
+                <ChatIcon name="chat" />
+              </span>
               <strong>Selecciona una conversacion</strong>
-              <p>Tambien puedes iniciar una nueva desde el boton superior.</p>
+              <p>Conecta, comparte progresos, recetas y planes semanales.</p>
+              <button
+                type="button"
+                className="chat-empty-action"
+                onClick={() => setShowNewConversation(true)}
+              >
+                Iniciar un nuevo chat
+              </button>
             </div>
           ) : (
             <>
@@ -440,26 +576,9 @@ export default function ChatsPage() {
                 />
                 <div>
                   <h3>{selectedConversation?.other_user?.nombre || "Chat"}</h3>
-                  <p>Comparte mensajes, recetas y planes semanales.</p>
+                  <p>Conversacion privada</p>
                 </div>
               </header>
-
-              <div className="chat-share-actions">
-                <button
-                  type="button"
-                  className="secondary-action-button"
-                  onClick={() => openSharePicker("recipe")}
-                >
-                  Compartir receta
-                </button>
-                <button
-                  type="button"
-                  className="secondary-action-button"
-                  onClick={() => openSharePicker("plan")}
-                >
-                  Compartir plan semanal
-                </button>
-              </div>
 
               {messagesError ? <p className="error-text">{messagesError}</p> : null}
 
@@ -471,19 +590,63 @@ export default function ChatsPage() {
                     <p>Escribe el primero para empezar la conversacion.</p>
                   </div>
                 ) : null}
-                {messages.map((message) => renderMessage(message))}
+                {messages.map((message, index) => {
+                  const previousMessage = messages[index - 1];
+                  const startsNewDay =
+                    !previousMessage ||
+                    getMessageDayKey(previousMessage.created_at) !==
+                      getMessageDayKey(message.created_at);
+
+                  return (
+                    <div className="chat-message-group" key={message.id}>
+                      {startsNewDay ? (
+                        <div className="chat-date-separator">
+                          <span>{formatMessageDay(message.created_at)}</span>
+                        </div>
+                      ) : null}
+                      {renderMessage(message)}
+                    </div>
+                  );
+                })}
                 <div ref={messagesEndRef} />
               </div>
 
               <form className="chat-compose-form" onSubmit={handleSendMessage}>
+                <div className="chat-compose-tools">
+                  <button
+                    type="button"
+                    className="chat-compose-tool"
+                    onClick={() => openSharePicker("plan")}
+                    aria-label="Compartir plan semanal"
+                    title="Compartir plan semanal"
+                  >
+                    <ChatIcon name="calendar" />
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-compose-tool"
+                    onClick={() => openSharePicker("recipe")}
+                    aria-label="Compartir receta"
+                    title="Compartir receta"
+                  >
+                    <ChatIcon name="utensils" />
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={messageText}
                   onChange={(event) => setMessageText(event.target.value)}
-                  placeholder="Escribe un mensaje"
+                  placeholder="Escribe un mensaje..."
+                  aria-label="Mensaje"
                 />
-                <button type="submit" className="submit-button" disabled={!messageText.trim()}>
-                  Enviar
+                <button
+                  type="submit"
+                  className="chat-send-button"
+                  disabled={!messageText.trim()}
+                  aria-label="Enviar mensaje"
+                  title="Enviar mensaje"
+                >
+                  <ChatIcon name="send" />
                 </button>
               </form>
             </>
