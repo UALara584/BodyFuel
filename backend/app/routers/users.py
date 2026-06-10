@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
+from ..security import hash_password, password_needs_rehash, verify_password
 from ..models import (
     AssistantMessage,
     ChatConversation,
@@ -93,7 +94,8 @@ def create_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
     if existing_user:
         raise HTTPException(status_code=400, detail="Ese correo ya está registrado")
 
-    user_data = user.dict()
+    user_data = user.model_dump()
+    user_data["password"] = hash_password(user_data["password"])
     user_data["nombre"] = user_data.get("nombre") or user_data["email"]
     user_data["objetivo"] = normalize_objective(user_data.get("objetivo"))
     user_data["edad"] = user_data.get("edad") or calculate_age(user_data.get("fecha_nacimiento"))
@@ -118,8 +120,13 @@ def register_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
 @router.post("/login", response_model=UserResponse, responses={401: {"description": INVALID_CREDENTIALS}})
 def login_user(credentials: AuthCredentials, db: Annotated[Session, Depends(get_db)]):
     user = db.query(User).filter(User.email == credentials.email).first()
-    if not user or user.password != credentials.password:
+    if not user or not verify_password(credentials.password, user.password):
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
+
+    if password_needs_rehash(user.password):
+        user.password = hash_password(credentials.password)
+        db.commit()
+        db.refresh(user)
 
     return user
 
@@ -146,7 +153,7 @@ def update_user(user_id: int, data: UserUpdate, db: Annotated[Session, Depends(g
     if not user:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
-    update_data = data.dict(exclude_unset=True)
+    update_data = data.model_dump(exclude_unset=True)
 
     if "email" in update_data:
         email_exists = (
@@ -159,7 +166,7 @@ def update_user(user_id: int, data: UserUpdate, db: Annotated[Session, Depends(g
         user.email = update_data["email"]
 
     if "password" in update_data:
-        user.password = update_data["password"]
+        user.password = hash_password(update_data["password"])
 
     if "nombre" in update_data:
         user.nombre = update_data["nombre"] or user.email
@@ -224,7 +231,7 @@ def delete_user_with_password(user_id: int, data: UserDeleteConfirm, db: Session
     if not user:
         raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
 
-    if user.password != data.password:
+    if not verify_password(data.password, user.password):
         raise HTTPException(status_code=401, detail=INVALID_CREDENTIALS)
 
     recipe_ids = select(Recipe.id).where(Recipe.user_id == user_id)

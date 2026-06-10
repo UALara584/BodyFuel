@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { loginUserWithCredentials } from "../services/api";
+import { getStoredCurrentUser, storeCurrentUser } from "../utils/currentUser";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -11,7 +12,7 @@ export default function LoginPage() {
   const location = useLocation();
 
   useEffect(() => {
-    const currentUser = localStorage.getItem("bf_current_user");
+    const currentUser = getStoredCurrentUser();
     if (currentUser) {
       navigate("/home", { replace: true });
     }
@@ -29,7 +30,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       const user = await loginUserWithCredentials({ email, password });
-      localStorage.setItem("bf_current_user", JSON.stringify(user));
+      storeCurrentUser(user);
       navigate("/home", { replace: true });
     } catch (err) {
       setError(err.message);

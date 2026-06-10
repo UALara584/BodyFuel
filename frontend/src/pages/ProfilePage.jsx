@@ -4,6 +4,11 @@ import ProfileMenu from "../components/ProfileMenu";
 import { UserAvatar } from "../components/UserAvatar";
 import { deleteUserAccount, fetchUserById, updateUser } from "../services/api";
 import { createAvatarFromFile, PROFILE_AVATARS } from "../utils/avatar";
+import {
+  clearStoredCurrentUser,
+  getStoredCurrentUser,
+  storeCurrentUser,
+} from "../utils/currentUser";
 
 const emptyProfile = {
   email: "",
@@ -245,7 +250,7 @@ function isValidEmail(value) {
 }
 
 function persistCurrentUser(user) {
-  localStorage.setItem("bf_current_user", JSON.stringify(user));
+  storeCurrentUser(user);
   window.dispatchEvent(new Event("bf:user-updated"));
 }
 
@@ -278,7 +283,7 @@ export default function ProfilePage({ mode = "summary" }) {
       let storedUser = null;
 
       try {
-        storedUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
+        storedUser = getStoredCurrentUser();
 
         if (!storedUser?.id) {
           const nextProfile = createProfileFromUser(exampleProfile, true);
@@ -402,7 +407,7 @@ export default function ProfilePage({ mode = "summary" }) {
         freshUser = updatedUser;
       }
 
-      const storedUser = JSON.parse(localStorage.getItem("bf_current_user") || "null") || {};
+      const storedUser = getStoredCurrentUser() || {};
       const currentUser = { ...storedUser, ...updatedUser, ...freshUser };
       const savedAvatar = currentUser.avatar || "initials";
       const savedImage = currentUser.profile_image || "";
@@ -546,7 +551,7 @@ export default function ProfilePage({ mode = "summary" }) {
     try {
       setDeletingAccount(true);
       await deleteUserAccount(userId, deletePassword);
-      localStorage.removeItem("bf_current_user");
+      clearStoredCurrentUser();
       window.dispatchEvent(new Event("bf:user-updated"));
       navigate("/", { replace: true });
     } catch (err) {

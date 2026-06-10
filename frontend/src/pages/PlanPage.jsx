@@ -15,6 +15,7 @@ import {
   fetchFullPlansByUser,
   fetchRecipes,
   fetchSharedFullPlan,
+  moveMealItem,
   updatePlanName,
 } from "../services/api";
 import { fetchChatConversations, sendChatMessage } from "../services/chatApi";
@@ -138,6 +139,101 @@ function removeItemFromPlan(currentPlan, itemId, removePendingMeal = false) {
   };
 }
 
+function moveItemInPlan(
+  currentPlan,
+  itemId,
+  targetDay,
+  targetHour,
+  targetMeal,
+  pendingMealId
+) {
+  if (!currentPlan) return currentPlan;
+
+  let sourceItem = null;
+  const mealsWithoutItem = (currentPlan.meals || []).flatMap((meal) => {
+    const item = (meal.items || []).find((entry) => entry.id === itemId);
+    if (!item) return [meal];
+
+    sourceItem = item;
+    const items = (meal.items || []).filter((entry) => entry.id !== itemId);
+    return items.length > 0 ? [{ ...meal, items }] : [];
+  });
+
+  if (!sourceItem) return currentPlan;
+
+  const destinationMeal = targetMeal || {
+    id: pendingMealId,
+    weekly_plan_id: currentPlan.id,
+    dia: targetDay,
+    tipo_comida: guessMealType(targetHour),
+    hora: targetHour,
+  };
+
+  return addItemToPlan(
+    { ...currentPlan, meals: mealsWithoutItem },
+    targetDay,
+    targetHour,
+    destinationMeal,
+    {
+      ...sourceItem,
+      meal_id: destinationMeal.id,
+      pending: true,
+    }
+  );
+}
+
+function confirmMovedItem(currentPlan, itemId, pendingMealId, savedMeal, savedItem) {
+  if (!currentPlan) return currentPlan;
+
+  return {
+    ...currentPlan,
+    meals: (currentPlan.meals || []).map((meal) => {
+      if (meal.id !== pendingMealId && meal.id !== savedMeal.id) {
+        return meal;
+      }
+
+      return {
+        ...meal,
+        ...savedMeal,
+        items: (meal.items || []).map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                ...savedItem,
+                food: item.food,
+                recipe: item.recipe,
+                pending: false,
+              }
+            : item
+        ),
+      };
+    }),
+  };
+}
+
+function restoreMovedItem(currentPlan, itemId, sourceMeal, sourceItem) {
+  if (!currentPlan) return currentPlan;
+
+  const mealsWithoutMovedItem = (currentPlan.meals || []).flatMap((meal) => {
+    const items = (meal.items || []).filter((item) => item.id !== itemId);
+    if (
+      items.length === 0 &&
+      String(meal.id).startsWith("pending-move-meal-")
+    ) {
+      return [];
+    }
+    return [{ ...meal, items }];
+  });
+
+  return addItemToPlan(
+    { ...currentPlan, meals: mealsWithoutMovedItem },
+    normalizeDay(sourceMeal.dia),
+    sourceMeal.hora,
+    sourceMeal,
+    { ...sourceItem, pending: false }
+  );
+}
+
 export default function PlanPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -149,6 +245,8 @@ export default function PlanPage() {
   const [error, setError] = useState("");
   const [activeDropDay, setActiveDropDay] = useState("");
   const [activeDropHour, setActiveDropHour] = useState("");
+  const [draggedPlanItemId, setDraggedPlanItemId] = useState(null);
+  const [movingItemIds, setMovingItemIds] = useState([]);
 
   const [showFoods, setShowFoods] = useState(true);
   const [showRecipes, setShowRecipes] = useState(false);
@@ -311,6 +409,13 @@ export default function PlanPage() {
       return;
     }
 
+    if (dragged.kind === "plan-item") {
+      await handleMovePlanItem(dragged.itemId, day, hour);
+      return;
+    }
+
+    if (!["food", "recipe"].includes(dragged.kind)) return;
+
     let pendingItemId = "";
     let existingMeal = null;
 
@@ -401,6 +506,81 @@ export default function PlanPage() {
   function handleDragStart(item, event) {
     event.dataTransfer.setData("application/json", JSON.stringify(item));
     event.dataTransfer.effectAllowed = "copy";
+  }
+
+  function handlePlanItemDragStart(item, event) {
+    event.dataTransfer.setData(
+      "application/json",
+      JSON.stringify({ kind: "plan-item", itemId: item.id })
+    );
+    event.dataTransfer.effectAllowed = "move";
+    setDraggedPlanItemId(item.id);
+  }
+
+  function handlePlanItemDragEnd() {
+    setDraggedPlanItemId(null);
+    setActiveDropDay("");
+    setActiveDropHour("");
+  }
+
+  async function handleMovePlanItem(itemId, day, hour) {
+    if (isReadOnlySharedPlan || movingItemIds.includes(itemId)) return;
+
+    const sourceMeal = (plan?.meals || []).find((meal) =>
+      (meal.items || []).some((item) => item.id === itemId)
+    );
+    const sourceItem = sourceMeal?.items?.find((item) => item.id === itemId);
+    if (!sourceMeal || !sourceItem || sourceItem.pending) return;
+
+    if (normalizeDay(sourceMeal.dia) === day && sourceMeal.hora === hour) {
+      return;
+    }
+
+    const targetMeal = (mealsByDay[day] || []).find(
+      (meal) => meal.hora === hour && normalizeDay(meal.dia) === day
+    );
+    const pendingMealId =
+      targetMeal?.id || `pending-move-meal-${plan.id}-${itemId}`;
+
+    setMovingItemIds((current) => [...current, itemId]);
+    updateCurrentPlan((current) =>
+      moveItemInPlan(
+        current,
+        itemId,
+        day,
+        hour,
+        targetMeal,
+        pendingMealId
+      )
+    );
+
+    try {
+      const result = await moveMealItem(itemId, {
+        weekly_plan_id: plan.id,
+        dia: day,
+        tipo_comida: guessMealType(hour),
+        hora: hour,
+      });
+
+      updateCurrentPlan((current) =>
+        confirmMovedItem(
+          current,
+          itemId,
+          pendingMealId,
+          result.meal,
+          result.item
+        )
+      );
+    } catch (err) {
+      updateCurrentPlan((current) =>
+        restoreMovedItem(current, itemId, sourceMeal, sourceItem)
+      );
+      setError(err.message);
+    } finally {
+      setMovingItemIds((current) =>
+        current.filter((movingItemId) => movingItemId !== itemId)
+      );
+    }
   }
 
   async function handleDeleteItem(itemId) {
@@ -791,7 +971,9 @@ export default function PlanPage() {
         {!isReadOnlySharedPlan ? (
           <aside className="card plan-library">
           <h3>Comidas disponibles</h3>
-          <p>Organiza por categorías y arrastra al horario deseado.</p>
+          <p>
+            Arrastra alimentos y recetas al horario; después puedes moverlos entre días.
+          </p>
 
           <div className="plan-library-sections">
             <div className="plan-library-section">
@@ -973,7 +1155,33 @@ export default function PlanPage() {
                       {meal?.items?.map((item) => (
                         <div
                           key={item.id}
-                          className={`week-pill ${item.pending ? "week-pill-pending" : ""}`}
+                          draggable={
+                            !isReadOnlySharedPlan &&
+                            !item.pending &&
+                            !movingItemIds.includes(item.id)
+                          }
+                          className={[
+                            "week-pill",
+                            item.pending ? "week-pill-pending" : "",
+                            draggedPlanItemId === item.id ? "week-pill-dragging" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          title={
+                            isReadOnlySharedPlan
+                              ? undefined
+                              : "Arrastra para mover a otro día u hora"
+                          }
+                          onDragStart={
+                            isReadOnlySharedPlan || item.pending
+                              ? undefined
+                              : (event) => handlePlanItemDragStart(item, event)
+                          }
+                          onDragEnd={
+                            isReadOnlySharedPlan
+                              ? undefined
+                              : handlePlanItemDragEnd
+                          }
                         >
                           <span>{item.food?.nombre || item.recipe?.nombre}</span>
                           {!isReadOnlySharedPlan && !item.pending ? (

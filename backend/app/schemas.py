@@ -2,9 +2,8 @@ from pydantic import BaseModel, Field
 from datetime import date, datetime
 
 
-class UserCreate(BaseModel):
+class UserBase(BaseModel):
     email: str
-    password: str
     nombre: str
     edad: int | None = None
     fecha_nacimiento: date | None = None
@@ -21,9 +20,13 @@ class UserCreate(BaseModel):
     profile_image: str | None = Field(default=None, max_length=750_000)
 
 
+class UserCreate(UserBase):
+    password: str = Field(min_length=6, max_length=128)
+
+
 class UserUpdate(BaseModel):
     email: str | None = None
-    password: str | None = None
+    password: str | None = Field(default=None, min_length=6, max_length=128)
     nombre: str | None = None
     edad: int | None = None
     fecha_nacimiento: date | None = None
@@ -41,10 +44,10 @@ class UserUpdate(BaseModel):
 
 
 class UserDeleteConfirm(BaseModel):
-    password: str
+    password: str = Field(min_length=1, max_length=1024)
 
 
-class UserResponse(UserCreate):
+class UserResponse(UserBase):
     id: int
 
     class Config:
@@ -53,7 +56,7 @@ class UserResponse(UserCreate):
 
 class AuthCredentials(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class TrackingCreate(BaseModel):
@@ -181,6 +184,21 @@ class MealItemResponse(MealItemCreate):
 
     class Config:
         from_attributes = True
+
+
+class MealItemMove(BaseModel):
+    weekly_plan_id: int
+    dia: str
+    tipo_comida: str
+    hora: str
+
+
+class MealItemMoveResponse(BaseModel):
+    item: MealItemResponse
+    meal: MealResponse
+    source_meal_id: int
+    source_meal_deleted: bool
+
 
 class FoodMini(BaseModel):
     id: int

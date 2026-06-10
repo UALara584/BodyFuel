@@ -15,6 +15,11 @@ import { UserAvatar } from "./components/UserAvatar";
 import { useEffect, useState } from "react";
 import { fetchUserById } from "./services/api";
 import { fetchChatConversations } from "./services/chatApi";
+import {
+  clearStoredCurrentUser,
+  getStoredCurrentUser,
+  storeCurrentUser,
+} from "./utils/currentUser";
 
 function NavIcon({ name }) {
   const icons = {
@@ -131,7 +136,7 @@ function NavLinkItem({ to, icon, children, badgeCount = 0 }) {
 }
 
 function RequireAuth() {
-  const hasUser = Boolean(localStorage.getItem("bf_current_user"));
+  const hasUser = Boolean(getStoredCurrentUser());
 
   if (!hasUser) {
     return <Navigate to="/" replace />;
@@ -143,9 +148,7 @@ function RequireAuth() {
 function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [currentUser, setCurrentUser] = useState(() =>
-    JSON.parse(localStorage.getItem("bf_current_user") || "null")
-  );
+  const [currentUser, setCurrentUser] = useState(getStoredCurrentUser);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const userName = currentUser?.nombre || "Usuario";
   const isProfileArea = [
@@ -161,7 +164,7 @@ function AppLayout() {
 
   useEffect(() => {
     function syncCurrentUser() {
-      setCurrentUser(JSON.parse(localStorage.getItem("bf_current_user") || "null"));
+      setCurrentUser(getStoredCurrentUser());
     }
 
     window.addEventListener("bf:user-updated", syncCurrentUser);
@@ -177,15 +180,14 @@ function AppLayout() {
     let cancelled = false;
 
     async function refreshCurrentUser() {
-      const storedUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
+      const storedUser = getStoredCurrentUser();
       if (!storedUser?.id) return;
 
       try {
         const freshUser = await fetchUserById(storedUser.id);
         if (cancelled) return;
 
-        const nextUser = { ...storedUser, ...freshUser };
-        localStorage.setItem("bf_current_user", JSON.stringify(nextUser));
+        const nextUser = storeCurrentUser({ ...storedUser, ...freshUser });
         setCurrentUser(nextUser);
       } catch {
         // Mantiene la sesión local si el backend no está disponible en ese momento.
@@ -236,7 +238,7 @@ function AppLayout() {
   }, [currentUser?.id, location.pathname]);
 
   function handleLogout() {
-    localStorage.removeItem("bf_current_user");
+    clearStoredCurrentUser();
     setCurrentUser(null);
     navigate("/", { replace: true });
   }

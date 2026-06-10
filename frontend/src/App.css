@@ -2371,9 +2371,12 @@ a {
   animation: plan-pill-enter 0.2s ease-out;
 }
 
-.plan-page .week-pill-pending {
-  opacity: 0.68;
-  background: rgba(21, 91, 77, 0.28);
+.plan-page .week-pill[draggable="true"] {
+  cursor: grab;
+}
+
+.plan-page .week-pill[draggable="true"]:active {
+  cursor: grabbing;
 }
 
 .plan-page .week-pill-pending::after {

@@ -160,6 +160,18 @@ export async function createMealItem(mealItemData) {
   return handleResponse(response, "Error al añadir elemento a la comida");
 }
 
+export async function moveMealItem(itemId, destination) {
+  const response = await fetch(`${API_BASE_URL}/meal-items/${itemId}/move`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(destination),
+  });
+
+  return handleResponse(response, "Error al mover elemento");
+}
+
 export async function deleteMealItem(itemId) {
   const response = await fetch(`${API_BASE_URL}/meal-items/${itemId}`, {
     method: "DELETE",

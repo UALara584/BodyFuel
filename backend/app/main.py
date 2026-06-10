@@ -8,6 +8,7 @@ from .models import Food
 from sqlalchemy.orm import Session
 from .database import Base, engine
 from . import models
+from .security import hash_password, is_password_hash
 from .routers.users import router as users_router
 from .routers.tracking import router as tracking_router
 from .routers.foods import router as foods_router
@@ -153,6 +154,20 @@ def ensure_user_auth_columns() -> None:
         )
         connection.execute(text("ALTER TABLE users ALTER COLUMN email SET NOT NULL"))
         connection.execute(text("ALTER TABLE users ALTER COLUMN password SET NOT NULL"))
+
+
+def ensure_hashed_passwords() -> None:
+    with Session(engine) as session:
+        users = session.query(models.User).all()
+        changed = False
+
+        for user in users:
+            if not is_password_hash(user.password):
+                user.password = hash_password(user.password)
+                changed = True
+
+        if changed:
+            session.commit()
 
 
 def ensure_user_nutrition_columns() -> None:
@@ -382,6 +397,7 @@ def initialize_database(retries: int = 20, delay: int = 3) -> None:
         try:
             Base.metadata.create_all(bind=engine)
             ensure_user_auth_columns()
+            ensure_hashed_passwords()
             ensure_user_nutrition_columns()
             ensure_user_avatar_column()
             ensure_recipe_macro_columns()
@@ -407,6 +423,7 @@ app.add_middleware(
 )
 Base.metadata.create_all(bind=engine)
 ensure_user_auth_columns()
+ensure_hashed_passwords()
 ensure_user_nutrition_columns()
 ensure_user_avatar_column()
 ensure_recipe_macro_columns()
