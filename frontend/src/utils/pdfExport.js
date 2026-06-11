@@ -1,6 +1,30 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+const WEEK_DAYS = [
+  { key: "lunes", label: "Lunes" },
+  { key: "martes", label: "Martes" },
+  { key: "miercoles", label: "Miércoles" },
+  { key: "jueves", label: "Jueves" },
+  { key: "viernes", label: "Viernes" },
+  { key: "sabado", label: "Sábado" },
+  { key: "domingo", label: "Domingo" },
+];
+
+function normalizeDayKey(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+export function getPlanMealsForDay(planData, dayKey) {
+  return (planData?.meals || [])
+    .filter((meal) => normalizeDayKey(meal.dia) === dayKey)
+    .sort((a, b) => (a.hora || "").localeCompare(b.hora || ""));
+}
+
 export async function exportPlanToPDF(planData, userName, weekStart) {
   try {
     // Create a temporary container for the PDF content
@@ -21,8 +45,6 @@ export async function exportPlanToPDF(planData, userName, weekStart) {
       return date.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
     };
 
-    const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-
     // HTML for the PDF
     let html = `
       <div style="text-align: center; margin-bottom: 20px;">
@@ -36,12 +58,12 @@ export async function exportPlanToPDF(planData, userName, weekStart) {
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
         <thead>
           <tr style="background-color: #14532d; color: white;">
-            ${dayNames.map((day, index) => {
+            ${WEEK_DAYS.map((day, index) => {
               const date = new Date(startDate);
               date.setDate(date.getDate() + index);
               return `
                 <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">
-                  <strong>${day}</strong><br/>
+                  <strong>${day.label}</strong><br/>
                   <span style="font-size: 10px; color: #ddd;">${formatDate(date)}</span>
                 </th>
               `;
@@ -50,13 +72,8 @@ export async function exportPlanToPDF(planData, userName, weekStart) {
         </thead>
         <tbody>
           <tr>
-            ${dayNames.map((_, dayIndex) => {
-              const dayName = dayNames[dayIndex].toLowerCase().replace("é", "e");
-              const dayMeals = planData.meals.filter(
-                (meal) => meal.dia.toLowerCase() === dayName.replace("Á", "a").replace("É", "e")
-              ) || [];
-
-              const sortedMeals = dayMeals.sort((a, b) => (a.hora || "").localeCompare(b.hora || ""));
+            ${WEEK_DAYS.map((day) => {
+              const sortedMeals = getPlanMealsForDay(planData, day.key);
 
               let mealHtml = '<div style="padding: 8px;">';
 

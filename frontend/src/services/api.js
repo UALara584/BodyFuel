@@ -395,7 +395,10 @@ export async function fetchExternalFoods(query) {
     `${API_BASE_URL}/external-foods/?q=${encodeURIComponent(query)}`
   );
 
-  return handleResponse(response, "Error al buscar alimentos en API externa");
+  return handleResponse(
+    response,
+    "Error al buscar alimentos en el catálogo nutricional"
+  );
 }
 
 export async function importFoodFromApi(foodData) {

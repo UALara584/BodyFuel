@@ -126,7 +126,8 @@ export default function FoodsPage() {
       } else {
         setExternalFoods([]);
         setExternalError(
-          externalData.reason?.message || "Error al buscar alimentos en API externa"
+          externalData.reason?.message ||
+            "Error al buscar alimentos en el catálogo nutricional"
         );
       }
     } finally {
@@ -304,7 +305,7 @@ export default function FoodsPage() {
       <div className="page-header page-header-row">
         <div>
           <h2>Alimentos</h2>
-          <p>Busca en BodyFuel y en la API externa desde un único buscador.</p>
+          <p>Busca en BodyFuel y en nuestro catálogo nutricional desde un único buscador.</p>
         </div>
 
         <button className="add-button" onClick={openModal} type="button" aria-label="Crear alimento">
@@ -337,7 +338,7 @@ export default function FoodsPage() {
           className={`foods-tab ${activeTab === "api" ? "active" : ""}`}
           onClick={() => setActiveTab("api")}
         >
-          API externa
+          Catálogo nutricional
           <span className="foods-tab-count">{externalFoods.length}</span>
         </button>
 
@@ -380,14 +381,14 @@ export default function FoodsPage() {
 
       {activeTab === "api" && (
         <section className="foods-results-section">
-          {externalLoading && <p>Cargando alimentos de la API...</p>}
+          {externalLoading && <p>Cargando el catálogo nutricional...</p>}
           {externalError && <p className="error-text">{externalError}</p>}
 
           {!externalLoading && !externalError && (
             <div className="grid-cards">
               {externalFoods.length === 0 ? (
                 <div className="card">
-                  <p>No hay resultados en la API externa para esa búsqueda.</p>
+                  <p>No hay resultados en el catálogo nutricional para esa búsqueda.</p>
                 </div>
               ) : (
                 externalFoods.map((food, index) => (
@@ -403,7 +404,7 @@ export default function FoodsPage() {
                         </p>
                       </div>
                       <div className="external-food-actions">
-                        <span className="api-badge">API</span>
+                        <span className="api-badge">Catálogo</span>
                         {renderFavoriteButton(food, "api")}
                       </div>
                     </div>
@@ -454,7 +455,7 @@ export default function FoodsPage() {
                       </div>
                       <div className="favorite-card-actions">
                         <span className={sourceType === "api" ? "api-badge" : "bodyfuel-badge"}>
-                          {sourceType === "api" ? "API" : "BodyFuel"}
+                          {sourceType === "api" ? "Catálogo" : "BodyFuel"}
                         </span>
                         {renderFavoriteButton(food, sourceType)}
                       </div>
