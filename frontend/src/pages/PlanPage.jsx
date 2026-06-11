@@ -23,6 +23,23 @@ import { exportPlanToPDF } from "../utils/pdfExport";
 
 const DAYS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
 const HOURS = Array.from({ length: 16 }, (_, index) => `${String(index + 7).padStart(2, "0")}:00`);
+const FOOD_FAVORITES_STORAGE_PREFIX = "bf_food_favorites";
+const RECIPE_FAVORITES_STORAGE_PREFIX = "bf_recipe_favorites";
+
+function readStoredFavorites(storageKey) {
+  try {
+    const storedFavorites = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    return Array.isArray(storedFavorites) ? storedFavorites : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeLibraryName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase();
+}
 
 function getCurrentWeekMonday() {
   const today = new Date();
@@ -249,9 +266,12 @@ export default function PlanPage() {
   const [movingItemIds, setMovingItemIds] = useState([]);
 
   const [showFoods, setShowFoods] = useState(true);
+  const [showAllFoods, setShowAllFoods] = useState(true);
+  const [showFavoriteFoods, setShowFavoriteFoods] = useState(false);
   const [showRecipes, setShowRecipes] = useState(false);
   const [showManualRecipes, setShowManualRecipes] = useState(false);
   const [showScrapingRecipes, setShowScrapingRecipes] = useState(false);
+  const [showFavoriteRecipes, setShowFavoriteRecipes] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState("");
   const [shareConversations, setShareConversations] = useState([]);
@@ -375,6 +395,38 @@ export default function PlanPage() {
     () => recipes.filter((recipe) => (recipe.origen || "").toLowerCase() !== "manual"),
     [recipes]
   );
+
+  const favoriteFoods = useMemo(() => {
+    const storedFavorites = readStoredFavorites(
+      `${FOOD_FAVORITES_STORAGE_PREFIX}_${userId ?? "guest"}`
+    );
+
+    return storedFavorites.map((favorite) => {
+      const favoriteId = Number(favorite.id);
+      const matchingFood = foods.find((food) =>
+        Number.isFinite(favoriteId) && favoriteId > 0
+          ? food.id === favoriteId
+          : normalizeLibraryName(food.nombre) === normalizeLibraryName(favorite.nombre)
+      );
+
+      return {
+        ...favorite,
+        planItem: matchingFood || null,
+      };
+    });
+  }, [foods, userId]);
+
+  const favoriteRecipes = useMemo(() => {
+    const storedFavorites = readStoredFavorites(
+      `${RECIPE_FAVORITES_STORAGE_PREFIX}_${userId ?? "guest"}`
+    );
+
+    return storedFavorites.map((favorite) => ({
+      ...favorite,
+      planItem:
+        recipes.find((recipe) => recipe.id === Number(favorite.id)) || null,
+    }));
+  }, [recipes, userId]);
 
   const mealsByDay = useMemo(() => {
     const grouped = Object.fromEntries(DAYS.map((day) => [day, []]));
@@ -987,28 +1039,104 @@ export default function PlanPage() {
               </button>
 
               {showFoods && (
-                <div className="plan-draggable-list">
-                  {foods.length === 0 ? (
-                    <p className="item-note">No hay alimentos disponibles.</p>
-                  ) : (
-                    foods.map((food) => (
-                      <button
-                        key={`food-${food.id}`}
-                        type="button"
-                        draggable
-                        className="plan-draggable-item"
-                        onDragStart={(event) =>
-                          handleDragStart(
-                            { kind: "food", id: food.id, nombre: food.nombre },
-                            event
-                          )
-                        }
-                      >
-                        <strong>{food.nombre}</strong>
-                        <span>Alimento</span>
-                      </button>
-                    ))
-                  )}
+                <div className="plan-subsections">
+                  <div className="plan-library-subsection">
+                    <button
+                      type="button"
+                      className="plan-subsection-toggle"
+                      onClick={() => setShowAllFoods((prev) => !prev)}
+                    >
+                      <span>Todos los alimentos</span>
+                      <span>{showAllFoods ? "−" : "+"}</span>
+                    </button>
+
+                    {showAllFoods && (
+                      <div className="plan-draggable-list">
+                        {foods.length === 0 ? (
+                          <p className="item-note">No hay alimentos disponibles.</p>
+                        ) : (
+                          foods.map((food) => (
+                            <button
+                              key={`food-${food.id}`}
+                              type="button"
+                              draggable
+                              className="plan-draggable-item"
+                              onDragStart={(event) =>
+                                handleDragStart(
+                                  { kind: "food", id: food.id, nombre: food.nombre },
+                                  event
+                                )
+                              }
+                            >
+                              <strong>{food.nombre}</strong>
+                              <span>Alimento</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="plan-library-subsection">
+                    <button
+                      type="button"
+                      className="plan-subsection-toggle"
+                      onClick={() => setShowFavoriteFoods((prev) => !prev)}
+                    >
+                      <span>Mis favoritos ({favoriteFoods.length})</span>
+                      <span>{showFavoriteFoods ? "−" : "+"}</span>
+                    </button>
+
+                    {showFavoriteFoods && (
+                      <div className="plan-draggable-list">
+                        {favoriteFoods.length === 0 ? (
+                          <p className="item-note">
+                            Todavía no tienes alimentos favoritos.
+                          </p>
+                        ) : (
+                          favoriteFoods.map((favorite) => {
+                            const food = favorite.planItem;
+                            const unavailable = !food;
+
+                            return (
+                              <button
+                                key={favorite.favoriteKey}
+                                type="button"
+                                draggable={!unavailable}
+                                disabled={unavailable}
+                                className="plan-draggable-item"
+                                title={
+                                  unavailable
+                                    ? "Guarda este alimento en BodyFuel para añadirlo al plan."
+                                    : favorite.nombre
+                                }
+                                onDragStart={
+                                  unavailable
+                                    ? undefined
+                                    : (event) =>
+                                        handleDragStart(
+                                          {
+                                            kind: "food",
+                                            id: food.id,
+                                            nombre: food.nombre,
+                                          },
+                                          event
+                                        )
+                                }
+                              >
+                                <strong>{favorite.nombre}</strong>
+                                <span>
+                                  {unavailable
+                                    ? "Guárdalo en BodyFuel"
+                                    : "Alimento favorito"}
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1068,14 +1196,14 @@ export default function PlanPage() {
                       className="plan-subsection-toggle"
                       onClick={() => setShowScrapingRecipes((prev) => !prev)}
                     >
-                      <span>Recetas scraping</span>
+                      <span>Recetas recomendadas</span>
                       <span>{showScrapingRecipes ? "−" : "+"}</span>
                     </button>
 
                     {showScrapingRecipes && (
                       <div className="plan-draggable-list">
                         {scrapingRecipes.length === 0 ? (
-                          <p className="item-note">No hay recetas scrapeadas disponibles.</p>
+                          <p className="item-note">No hay recetas recomendadas disponibles.</p>
                         ) : (
                           scrapingRecipes.map((recipe) => (
                             <button
@@ -1092,9 +1220,72 @@ export default function PlanPage() {
                               }
                             >
                               <strong>{truncateScrapingRecipeName(recipe.nombre)}</strong>
-                              <span>Receta scraping</span>
+                              <span>Receta recomendada</span>
                             </button>
                           ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="plan-library-subsection">
+                    <button
+                      type="button"
+                      className="plan-subsection-toggle"
+                      onClick={() => setShowFavoriteRecipes((prev) => !prev)}
+                    >
+                      <span>Mis favoritos ({favoriteRecipes.length})</span>
+                      <span>{showFavoriteRecipes ? "−" : "+"}</span>
+                    </button>
+
+                    {showFavoriteRecipes && (
+                      <div className="plan-draggable-list">
+                        {favoriteRecipes.length === 0 ? (
+                          <p className="item-note">
+                            Todavía no tienes recetas favoritas.
+                          </p>
+                        ) : (
+                          favoriteRecipes.map((favorite) => {
+                            const recipe = favorite.planItem;
+                            const unavailable = !recipe;
+
+                            return (
+                              <button
+                                key={favorite.favoriteKey}
+                                type="button"
+                                draggable={!unavailable}
+                                disabled={unavailable}
+                                className="plan-draggable-item plan-draggable-item-compact"
+                                title={
+                                  unavailable
+                                    ? "Esta receta ya no está disponible."
+                                    : recipe.nombre
+                                }
+                                onDragStart={
+                                  unavailable
+                                    ? undefined
+                                    : (event) =>
+                                        handleDragStart(
+                                          {
+                                            kind: "recipe",
+                                            id: recipe.id,
+                                            nombre: recipe.nombre,
+                                          },
+                                          event
+                                        )
+                                }
+                              >
+                                <strong>
+                                  {truncateScrapingRecipeName(favorite.nombre)}
+                                </strong>
+                                <span>
+                                  {unavailable
+                                    ? "No disponible"
+                                    : "Receta favorita"}
+                                </span>
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createFood,
   fetchExternalFoods,
@@ -102,7 +102,7 @@ export default function FoodsPage() {
     fuente: "manual",
   });
 
-  async function loadFoodsAndApi(nombre = "") {
+  const loadFoodsAndApi = useCallback(async (nombre = "") => {
     setLoading(true);
     setExternalLoading(true);
     setError("");
@@ -133,11 +133,15 @@ export default function FoodsPage() {
       setLoading(false);
       setExternalLoading(false);
     }
-  }
+  }, [userId]);
 
   useEffect(() => {
-    loadFoodsAndApi();
-  }, [userId]);
+    const timerId = window.setTimeout(() => {
+      loadFoodsAndApi();
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [loadFoodsAndApi]);
 
   const favoriteKeys = useMemo(
     () => new Set(favoriteFoods.map((food) => food.favoriteKey)),

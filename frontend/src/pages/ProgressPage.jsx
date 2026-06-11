@@ -102,12 +102,6 @@ function formatSigned(value, decimals = 1, suffix = "") {
   return `${sign}${formatNumber(value, decimals)}${suffix}`;
 }
 
-function average(values) {
-  const cleanValues = values.filter((value) => Number.isFinite(value));
-  if (cleanValues.length === 0) return null;
-  return cleanValues.reduce((sum, value) => sum + value, 0) / cleanValues.length;
-}
-
 function linearRegression(points) {
   if (points.length < 2) return null;
 
@@ -512,14 +506,6 @@ export default function ProgressPage() {
       .sort((a, b) => a.fecha.localeCompare(b.fecha))
       .at(-1);
 
-    const actualCalories = rows
-      .map((row) => row.actualCalories)
-      .filter((value) => value !== null);
-    const averageCalories = average(actualCalories);
-    const plannedAverageCalories = average(
-      rows.map((row) => row.plannedCalories).filter((value) => value !== null)
-    );
-
     const eligibleAdherenceRows = rows.filter((row) => !row.isFuture);
     const completedDays = eligibleAdherenceRows.filter((row) => row.completed).length;
     const adherence = eligibleAdherenceRows.length
@@ -582,8 +568,6 @@ export default function ProgressPage() {
       weightTrend,
       periodWeightChange,
       lastWeight: lastWeight ? Number(lastWeight.peso) : null,
-      averageCalories,
-      plannedAverageCalories,
       adherence,
       completedDays,
       eligibleAdherenceDays: eligibleAdherenceRows.length,
@@ -603,10 +587,6 @@ export default function ProgressPage() {
     setPeriodStart(getInitialPeriodStart(nextMode));
   }
 
-  const calorieDelta =
-    progress.averageCalories !== null && targetCalories
-      ? progress.averageCalories - targetCalories
-      : null;
   const weeklyWeightSlope = progress.weightTrend ? progress.weightTrend.slope * 7 : null;
 
   return (
@@ -669,17 +649,6 @@ export default function ProgressPage() {
                   }
                 />
                 <MetricCard
-                  label="Calorías medias"
-                  value={progress.averageCalories !== null ? `${formatNumber(progress.averageCalories)} kcal` : "-"}
-                  detail={
-                    calorieDelta !== null
-                      ? `${formatSigned(calorieDelta, 0, " kcal")} frente al objetivo`
-                      : progress.plannedAverageCalories !== null
-                        ? `${formatNumber(progress.plannedAverageCalories)} kcal planificadas`
-                        : "Sin registros de calorías"
-                  }
-                />
-                <MetricCard
                   label="Adherencia"
                   value={`${progress.adherence}%`}
                   detail={`${progress.completedDays} de ${progress.eligibleAdherenceDays} días marcados`}
@@ -702,23 +671,6 @@ export default function ProgressPage() {
                     {weeklyWeightSlope !== null ? formatSigned(weeklyWeightSlope, 2, " kg/sem") : "Sin tendencia"}
                   </strong>
                   <p>{progress.weightPoints.length >= 2 ? "Regresión del periodo seleccionado" : "Registra al menos dos pesos"}</p>
-                </article>
-                <article className="card progress-insight">
-                  <span>Balance energético</span>
-                  <strong>
-                    {calorieDelta !== null
-                      ? calorieDelta > 0
-                        ? "Superávit"
-                        : calorieDelta < 0
-                          ? "Déficit"
-                          : "En objetivo"
-                      : "Sin media"}
-                  </strong>
-                  <p>
-                    {progress.averageCalories !== null
-                      ? `${formatNumber(progress.averageCalories)} kcal registradas de media`
-                      : "Añade calorías consumidas para calcularlo"}
-                  </p>
                 </article>
                 <article className="card progress-insight">
                   <span>Consistencia</span>

@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { UserAvatar } from "../components/UserAvatar";
 import {
   cloneRecipeToMyRecipes,
@@ -10,6 +10,75 @@ import {
   updateRecipeWithItems,
 } from "../services/api";
 import { fetchChatConversations, sendChatMessage } from "../services/chatApi";
+
+const RECIPE_FAVORITES_STORAGE_PREFIX = "bf_recipe_favorites";
+
+function getRecipeFavoritesStorageKey(userId) {
+  return `${RECIPE_FAVORITES_STORAGE_PREFIX}_${userId ?? "guest"}`;
+}
+
+function readFavoriteRecipes(storageKey) {
+  try {
+    const storedFavorites = JSON.parse(localStorage.getItem(storageKey) || "[]");
+    return Array.isArray(storedFavorites) ? storedFavorites : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeRecipeName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase();
+}
+
+function getRecipeSourceType(recipe) {
+  return (recipe?.origen || "").toLowerCase() === "manual"
+    ? "manual"
+    : "scraping";
+}
+
+function getRecipeFavoriteKey(recipe) {
+  if (recipe.favoriteKey) {
+    return recipe.favoriteKey;
+  }
+
+  const sourceType = getRecipeSourceType(recipe);
+
+  if (recipe.id !== undefined && recipe.id !== null) {
+    return `${sourceType}:${recipe.id}`;
+  }
+
+  return `${sourceType}:${normalizeRecipeName(recipe.nombre)}:${recipe.fuente_url || ""}`;
+}
+
+function normalizeFavoriteRecipe(recipe) {
+  return {
+    ...recipe,
+    favoriteKey: getRecipeFavoriteKey(recipe),
+    origen: getRecipeSourceType(recipe),
+    nombre: recipe.nombre || "Receta sin nombre",
+    calorias_totales: Number(recipe.calorias_totales || 0),
+    proteinas: Number(recipe.proteinas || 0),
+    carbos: Number(recipe.carbos || 0),
+    grasas: Number(recipe.grasas || 0),
+  };
+}
+
+function FavoriteIcon({ filled }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="m12 3.8 2.5 5.1 5.6.8-4 3.9.9 5.5-5-2.6-5 2.6.9-5.5-4-3.9 5.6-.8z"
+        fill={filled ? "currentColor" : "none"}
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
 
 function emptyRecipeItem() {
   return {
@@ -32,9 +101,13 @@ function recipeItemsFromRecipe(recipe) {
 export default function RecipesPage() {
   const currentUser = JSON.parse(localStorage.getItem("bf_current_user") || "null");
   const userId = currentUser?.id ?? null;
+  const favoritesStorageKey = getRecipeFavoritesStorageKey(userId);
 
   const [recipes, setRecipes] = useState([]);
   const [foods, setFoods] = useState([]);
+  const [favoriteRecipes, setFavoriteRecipes] = useState(() =>
+    readFavoriteRecipes(favoritesStorageKey)
+  );
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("manual");
 
@@ -67,7 +140,7 @@ export default function RecipesPage() {
 
   const [recipeItems, setRecipeItems] = useState([emptyRecipeItem()]);
 
-  async function loadRecipesAndFoods() {
+  const loadRecipesAndFoods = useCallback(async () => {
     setLoading(true);
     setFoodsLoading(true);
     setError("");
@@ -86,11 +159,15 @@ export default function RecipesPage() {
       setLoading(false);
       setFoodsLoading(false);
     }
-  }
+  }, [userId]);
 
   useEffect(() => {
-    loadRecipesAndFoods();
-  }, [userId]);
+    const timerId = window.setTimeout(() => {
+      loadRecipesAndFoods();
+    }, 0);
+
+    return () => window.clearTimeout(timerId);
+  }, [loadRecipesAndFoods]);
 
   const manualRecipes = useMemo(
     () => recipes.filter((recipe) => (recipe.origen || "").toLowerCase() === "manual"),
@@ -117,6 +194,34 @@ export default function RecipesPage() {
       recipe.nombre.toLowerCase().includes(query)
     );
   }, [scrapingRecipes, search]);
+
+  const favoriteKeys = useMemo(
+    () => new Set(favoriteRecipes.map((recipe) => recipe.favoriteKey)),
+    [favoriteRecipes]
+  );
+
+  const resolvedFavoriteRecipes = useMemo(() => {
+    const currentRecipesByKey = new Map(
+      recipes.map((recipe) => [getRecipeFavoriteKey(recipe), recipe])
+    );
+
+    return favoriteRecipes.map((favorite) => {
+      const currentRecipe = currentRecipesByKey.get(favorite.favoriteKey);
+      return currentRecipe ? normalizeFavoriteRecipe(currentRecipe) : favorite;
+    });
+  }, [favoriteRecipes, recipes]);
+
+  const filteredFavoriteRecipes = useMemo(() => {
+    const query = normalizeRecipeName(search);
+
+    if (!query) {
+      return resolvedFavoriteRecipes;
+    }
+
+    return resolvedFavoriteRecipes.filter((recipe) =>
+      normalizeRecipeName(recipe.nombre).includes(query)
+    );
+  }, [resolvedFavoriteRecipes, search]);
 
   const computedTotals = useMemo(() => {
     return recipeItems.reduce(
@@ -202,6 +307,55 @@ export default function RecipesPage() {
       }
       return prev.filter((_, itemIndex) => itemIndex !== index);
     });
+  }
+
+  function updateFavoriteRecipes(updater) {
+    setFavoriteRecipes((prevFavorites) => {
+      const nextFavorites = updater(prevFavorites);
+      localStorage.setItem(favoritesStorageKey, JSON.stringify(nextFavorites));
+      return nextFavorites;
+    });
+  }
+
+  function isFavoriteRecipe(recipe) {
+    return favoriteKeys.has(getRecipeFavoriteKey(recipe));
+  }
+
+  function handleToggleFavorite(recipe) {
+    const favoriteKey = getRecipeFavoriteKey(recipe);
+
+    updateFavoriteRecipes((prevFavorites) => {
+      const alreadyFavorite = prevFavorites.some(
+        (favorite) => favorite.favoriteKey === favoriteKey
+      );
+
+      if (alreadyFavorite) {
+        return prevFavorites.filter(
+          (favorite) => favorite.favoriteKey !== favoriteKey
+        );
+      }
+
+      return [normalizeFavoriteRecipe(recipe), ...prevFavorites];
+    });
+  }
+
+  function renderFavoriteButton(recipe) {
+    const favorite = isFavoriteRecipe(recipe);
+    const label = favorite
+      ? `Quitar ${recipe.nombre} de favoritos`
+      : `A\u00f1adir ${recipe.nombre} a favoritos`;
+
+    return (
+      <button
+        type="button"
+        className={`favorite-recipe-button ${favorite ? "favorite-recipe-button-active" : ""}`}
+        onClick={() => handleToggleFavorite(recipe)}
+        aria-label={label}
+        title={label}
+      >
+        <FavoriteIcon filled={favorite} />
+      </button>
+    );
   }
 
   async function handleSaveRecipe(event) {
@@ -346,6 +500,12 @@ export default function RecipesPage() {
     try {
       setDeletingRecipe(true);
       await deleteRecipe(recipeToDelete.id);
+      const deletedFavoriteKey = getRecipeFavoriteKey(recipeToDelete);
+      updateFavoriteRecipes((prevFavorites) =>
+        prevFavorites.filter(
+          (favorite) => favorite.favoriteKey !== deletedFavoriteKey
+        )
+      );
       await loadRecipesAndFoods();
       closeDeleteConfirm();
     } catch (err) {
@@ -355,7 +515,7 @@ export default function RecipesPage() {
     }
   }
 
-  function renderRecipeCards(list, emptyText) {
+  function renderRecipeCards(list, emptyText, showSource = false) {
     if (list.length === 0) {
       return (
         <div className="card">
@@ -367,16 +527,31 @@ export default function RecipesPage() {
     return (
       <div className="grid-cards">
         {list.map((recipe) => {
+          const sourceType = getRecipeSourceType(recipe);
+
           return (
-            <div key={recipe.id} className="card recipe-title-card">
-              <button
-                type="button"
-                className="recipe-title-trigger"
-                onClick={() => openRecipeDetail(recipe)}
-              >
-                <span className="recipe-title-text">{recipe.nombre}</span>
-                <span className="food-card-arrow">Ver</span>
-              </button>
+            <div key={getRecipeFavoriteKey(recipe)} className="card recipe-title-card">
+              <div className="recipe-title-card-row">
+                <button
+                  type="button"
+                  className="recipe-title-trigger"
+                  onClick={() => openRecipeDetail(recipe)}
+                >
+                  <span className="recipe-title-text">{recipe.nombre}</span>
+                  <span className="food-card-arrow">Ver</span>
+                </button>
+
+                <div className="recipe-card-actions">
+                  {showSource ? (
+                    <span
+                      className={`recipe-origin-badge recipe-origin-badge-${sourceType}`}
+                    >
+                      {sourceType === "manual" ? "Mis recetas" : "Recomendada"}
+                    </span>
+                  ) : null}
+                  {renderFavoriteButton(recipe)}
+                </div>
+              </div>
             </div>
           );
         })}
@@ -424,7 +599,16 @@ export default function RecipesPage() {
           className={`recipes-tab ${activeTab === "scraping" ? "active" : ""}`}
           onClick={() => setActiveTab("scraping")}
         >
-          Recetas scraping
+          Recetas recomendadas
+        </button>
+
+        <button
+          type="button"
+          className={`recipes-tab ${activeTab === "favorites" ? "active" : ""}`}
+          onClick={() => setActiveTab("favorites")}
+        >
+          Favoritas
+          <span className="foods-tab-count">{favoriteRecipes.length}</span>
         </button>
       </div>
 
@@ -445,7 +629,19 @@ export default function RecipesPage() {
         <section className="recipe-section">
           {renderRecipeCards(
             filteredScrapingRecipes,
-            "No hay recetas scrapeadas disponibles."
+            "No hay recetas recomendadas disponibles."
+          )}
+        </section>
+      )}
+
+      {!loading && !foodsLoading && !error && activeTab === "favorites" && (
+        <section className="recipe-section">
+          {renderRecipeCards(
+            filteredFavoriteRecipes,
+            favoriteRecipes.length === 0
+              ? "Todav\u00eda no tienes recetas favoritas."
+              : "No hay recetas favoritas con esa b\u00fasqueda.",
+            true
           )}
         </section>
       )}
@@ -607,14 +803,17 @@ export default function RecipesPage() {
           >
             <div className="modal-header">
               <h3>{selectedRecipe.nombre}</h3>
-              <button
-                className="close-button"
-                type="button"
-                onClick={closeRecipeDetail}
-                aria-label="Cerrar detalle de receta"
-              >
-                ×
-              </button>
+              <div className="recipe-detail-header-actions">
+                {renderFavoriteButton(selectedRecipe)}
+                <button
+                  className="close-button"
+                  type="button"
+                  onClick={closeRecipeDetail}
+                  aria-label="Cerrar detalle de receta"
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             <div className="recipe-detail-content">
